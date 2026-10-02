@@ -21,7 +21,7 @@ const PLUGIN = require('fs').readFileSync(PLUGIN_PATH, 'utf8');
   t('注入 GEOSITE,CN,DIRECT', cfg.includes('GEOSITE,CN,DIRECT'));
   t('注入 RULE-SET,china_ip,DIRECT', cfg.includes('RULE-SET,china_ip,DIRECT'));
   t('注入 china_ip rule-provider', /china_ip:\n    type: file/.test(cfg));
-  t('排除清单最先', idx('seeyoncloud.com,DIRECT') < idx('services.googleapis.cn'));
+  t('排除清单最先', idx('example-corp.cn,DIRECT') < idx('services.googleapis.cn'));
   t('出海例外先于 GEOSITE,CN', idx('igamecj.com') >= 0 && idx('igamecj.com') < idx('GEOSITE,CN,DIRECT'));
   t('兜底直连先于订阅 GEOIP', idx('GEOSITE,CN,DIRECT') < idx('GEOIP,CN,DIRECT'));
   t('订阅 MATCH 最后兜底', idx('MATCH,良心云') > idx('GEOSITE,CN,DIRECT'));
