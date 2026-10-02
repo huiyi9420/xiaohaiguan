@@ -1,0 +1,30 @@
+const { chromium } = require('playwright-core');
+const { STUB_URL, EXE, SRC: PLUGIN_PATH } = require('../util');
+const PLUGIN = require('fs').readFileSync(PLUGIN_PATH, 'utf8');
+(async () => {
+  const browser = await chromium.launch({ executablePath: EXE });
+  const p = await browser.newPage({ viewport: { width: 392, height: 800 } });
+  p.on('pageerror', e => console.log('PAGEERROR:', e.message));
+  await p.goto(STUB_URL);
+  await p.evaluate(() => { localStorage.setItem('hs_run','1'); localStorage.setItem('hs_genver','1.7.9'); localStorage.removeItem('hs_ov'); });
+  await p.reload();
+  await p.addScriptTag({ content: PLUGIN });
+  await p.waitForTimeout(3000);
+  const t = (n, ok) => console.log((ok ? '✅' : '❌') + ' ' + n);
+  await p.evaluate(() => { document.querySelector('#hs_status').click(); });
+  await p.waitForTimeout(1200);
+  t('升级前状态页有待升级横幅', await p.evaluate(() => document.body.textContent.includes('待升级')));
+  t('找到 ⬆️升级 按钮', await p.evaluate(() => { const b = [...document.querySelectorAll('#hs_mgr_foot .btn')].find(x => x.textContent.includes('升级')); if (b) { b.click(); return true } return false; }));
+  let okWin = false;
+  for (let i = 0; i < 60; i++) { await p.waitForTimeout(2000);
+    okWin = await p.evaluate(() => document.body.textContent.includes('升级成功') || document.body.textContent.includes('升级完成'));
+    if (okWin) break; }
+  t('升级流程完成(成功窗出现)', okWin);
+  t('三件套烙印已更新到当前版本', await p.evaluate(() => window.__genVer) !== '1.7.9');
+  t('升级后状态页横幅已消失(即时重渲染)', await p.evaluate(() => !document.body.textContent.includes('待升级')));
+  await p.evaluate(() => { const m = document.getElementById('hs_modal_simple'); if (m) m.style.display = 'none'; const mk = document.getElementById('hs_upg_mask'); if (mk) mk.remove(); });
+  await p.waitForTimeout(400);
+  t('关闭成功窗后横幅仍消失', await p.evaluate(() => !document.body.textContent.includes('待升级')));
+  await p.evaluate(() => localStorage.removeItem('hs_genver'));
+  await browser.close();
+})().catch(e => { console.error('FATAL:', e.message); process.exit(1); });

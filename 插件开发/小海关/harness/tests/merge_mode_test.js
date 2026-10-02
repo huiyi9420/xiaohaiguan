@@ -1,0 +1,32 @@
+const { chromium } = require('playwright-core');
+const { STUB_URL, EXE, SRC: PLUGIN_PATH } = require('../util');
+const PLUGIN = require('fs').readFileSync(PLUGIN_PATH, 'utf8');
+(async () => {
+  const browser = await chromium.launch({ executablePath: EXE });
+  const p = await browser.newPage({ viewport: { width: 430, height: 900 } });
+  p.on('pageerror', e => console.log('PAGEERROR:', e.message));
+  await p.goto(STUB_URL);
+  await p.evaluate(() => { localStorage.setItem('hs_ov', JSON.stringify({ policySrc: 'merge' })); localStorage.setItem('hs_run','0'); });
+  await p.reload();
+  await p.addScriptTag({ content: PLUGIN });
+  await p.waitForTimeout(2500);
+  await p.evaluate(() => { const b = document.querySelector('#hs_btn_start'); if (b) b.click(); });
+  let cfg = 'NOT_CAPTURED';
+  for (let i = 0; i < 30; i++) { await p.waitForTimeout(2000); cfg = await p.evaluate(() => window.__lastCfg || ''); if (cfg) break; }
+  require('fs').writeFileSync('/tmp/merge_cfg.yaml', cfg);
+  const lines = cfg.split('\n');
+  const idx = n => lines.findIndex(l => l.includes(n));
+  const t = (n, ok) => console.log((ok ? '✅' : '❌') + ' ' + n);
+  t('截获 config.yaml(合并模式)', cfg.length > 1000);
+  t('合并模式段落标记', cfg.includes('合并模式'));
+  t('本地主组组链存在(🚀 节点选择)', cfg.includes('name: "🚀 节点选择"') || cfg.includes('name: \\"🚀 节点选择\\"'));
+  t('订阅组保留(良心云)', cfg.includes('name: 良心云'));
+  t('本地规则最先(seeyoncloud DIRECT)', idx('example-corp.cn,DIRECT') >= 0 && idx('example-corp.cn,DIRECT') < idx('services.googleapis.cn'));
+  t('国内直通在订阅规则前', idx('GEOSITE,CN,DIRECT') >= 0 && idx('GEOSITE,CN,DIRECT') < idx('services.googleapis.cn'));
+  t('私网免流段改 REJECT(100.64.0.0/10)', cfg.includes('IP-CIDR,100.64.0.0/10,REJECT') && !cfg.includes('IP-CIDR,100.64.0.0/10,DIRECT'));
+  t('v6 链路本地段改 REJECT(fe80::/10)', cfg.includes('IP-CIDR6,fe80::/10,REJECT'));
+  t('MATCH 指本地主组', cfg.includes('MATCH,🚀 节点选择') && !cfg.includes('MATCH,良心云'));
+  t('china_ip 本地数据集', /china_ip:\n    type: file/.test(cfg));
+  t('订阅原规则保留(googleapis→良心云)', cfg.includes('services.googleapis.cn,良心云'));
+  await browser.close();
+})().catch(e => { console.error('FATAL:', e.message); process.exit(1); });

@@ -1,0 +1,10 @@
+{
+  "name": "hs-harness",
+  "private": true,
+  "scripts": {
+    "test": "node test_all.js"
+  },
+  "dependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}
