@@ -48,17 +48,21 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.9.58'; /* v2.9.58: ET 共存 state.json 降级抽取补全——对端文件持续非法 JSON(实锢:ET 插件 infra_endpoints joiner 少引号,≥2 端点即恒非法)时降级对象缺 updated/tun/config_server,致「更新于 ?」恒显+TUN 行消失+防火墙 ETTUN/ETCS 兜底恒空;现降级也抽齐三字段,降级后净读重试一次救瞬态半文件,warn 会话降噪;携 v2.9.57(订阅有效期方案B+卡片去图标)一并转正,用户真机验收通过 */ /* v2.9.57(beta): 订阅有效期方案B+订阅卡片去图标——①响应头有流量数据却无 expire→自动判长期有效(中国国际机场实证) ②卡片图标全撤(徽章/流量行/meta/按钮/编辑卡共17处,用户反馈移动端按钮放不下),页头「＋添加订阅」保留 */
+const V = '2.9.59'; /* v2.9.59(beta): 控制台纪律落地(用户令"不允许控制台拉屎")——调试日志仅 beta 构建输出(构建注入 window.__HS_DEBUG__),发行版门禁保证零 console.log;console.warn/error=报错类两版都留;构建脚本新增 --beta 模式自动产出 版本号beta.txt */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
+/* v2.9.59 控制台纪律(用户令): 调试日志仅 beta 构建输出——构建脚本 --beta 在产物注入 window.__HS_DEBUG__=!0,
+   发行/check 构建不注入且门禁扫描零 dbg(违者构建失败);console.warn/error=报错类,两种产物都保留 */
+const dbg = function () { if (typeof window !== 'undefined' && window.__HS_DEBUG__) console.log.apply(console, arguments) };
+
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
+  '2.9.59': '(beta 待真机验收)控制台纪律落地:调试日志(init/applyFw 等 19 处 console.log)改为 dbg 通道——仅 beta 构建输出(构建脚本 --beta 注入 window.__HS_DEBUG__ 开关),发行版构建门禁扫描产物零 console.log 违者构建失败;console.warn/error 属报错类两种产物都保留(双实例守卫/ET 降级提示等);构建发行版.sh 新增 --beta 参数自动产出 小海关插件-X.Y.Zbeta.txt(版本号取自源码 V)',
   '2.9.58': 'ET 共存 state.json 降级抽取补全:对端文件持续非法 JSON 时(实锇:ET 插件 infra_endpoints joiner 少引号,≥2 外联端点起文件恒非法→小海关每次解析必炸恒走降级,而降级对象缺 updated/tun)「更新于 ?」恒显+TUN 网卡行消失;现降级对象补抽 tun/config_server/updated(防火墙 ETTUN/ETCS 兜底同步复活),降级后 350ms 净读重试一次救瞬态半文件,console.warn 会话只提示一次不再刷屏;ET 侧一字符根修另报',
   '2.9.57': '①订阅有效期方案B:服务端发了流量数据却未给 expire→自动判「长期有效」(此前此类订阅正文又无"长期/永久"字样则什么都不显示;实证:中国国际机场 expire=空+正文零线索,良心云靠正文信息节点"套餐到期：长期有效"字样兜底);正文若补抓到具体到期日期仍会覆盖为日期,自动判定可被纠正 ②订阅卡片图标全撤(徽章/流量行/meta/按钮/编辑卡 17 处):表情图标挤占按钮空间,移动端放不下(用户反馈),页头添加按钮保留',
   '2.9.56': '修复 v6 开关自诞生失效(pr 未声明+未 await)+新手引导✕复活+卸载取消语义+UDP实测异常防护',
   '2.9.55': '分流图兜底胶囊限宽(PC 真机反馈宽达 ~210px):第⑤层胶囊文本=「兜底 +出口文本」,v2.9.53 起出口含节点名+延迟(断链时甚至是全链)且宽度公式全长×9.8 无上限,长节点名直接撑爆;现按「名 · Nms[ ·未测活]」拆分,名超预算截…(延迟/存活后缀保留),总宽 13 单位封顶;宽度公式改按字符类别估宽(全宽1/ASCII .56×fs×1.1 余量,替代全长×9.8);胶囊加 title 悬停显全文,全链仍在详情卡「兜底出口」行;副标(节点名行)同步限宽;补 v2.9.53 欠的出口文本 esc(模块纪律:用户数据一律 esc)',
-  '2.9.54': '移动端弹窗控件叠压根修(用户反馈+本人手机复现:节点过滤弹窗关键词输入框/地区保留/实时预览挤到一块):根因=弹窗体 .hs-mb 是被 86dvh 卡死的 flex 列且 overflow:hidden,内容超高时收缩压力全压在带 min-height:42px 的 .hs-row 上(显式 min-height 顶掉 auto 内容下限,实测行 clientH 91 vs scrollH 97),行内容溢出行盒、输入框与地区胶囊压进邻行;修复=①.hs-row 加 flex 永不压缩(全部弹窗受益) ②.hs-mb 改纵向可滚(溢出走滚动不再裁死) ③救活 v2.9.6 移动端左右边距 16→0 决策(被同优先级后定义覆盖失效,规则移回基定义之后) ④实时预览两列 ≤480px 纵排(窄屏两列胶囊省略号过重)',
 }; /* 超5版删最底(2.8.10) */
 /* 语义化版本比较: a<b 负 / 相等 0 / a>b 正 */
 function verCmp(a, b) {
@@ -108,7 +112,7 @@ let HS_UPG_OK = false; /* 升级成败判定:engineStart 复核通过才置真(e
 
 function toast(msg, color) {
   if (typeof createToast === 'function') { createToast(msg, color || 'green', 2600); return }
-  console.log('[小海关]', msg);
+  dbg('[小海关]', msg);
 }
 
 /* 文件读写(小配置,base64 往返;.bak 备份) */
@@ -875,7 +879,7 @@ function genConfigYaml() {
         if (ST.chn > 0) inject.push('RULE-SET,china_ip,DIRECT');
         else if (ST.geoIpT > 0) inject.push('GEOIP,CN,DIRECT,no-resolve');
       }
-      else { console.log('[小海关] 订阅无 select 组,强制清单/出海例外/国内兜底未注入(订阅规则自管)'); } /* genConfigYaml 是同步函数,留痕走 console */
+      else { dbg('[小海关] 订阅无 select 组,强制清单/出海例外/国内兜底未注入(订阅规则自管)'); } /* genConfigYaml 是同步函数,留痕走 console */
       /* F05 结构化合成: 订阅解析结果(锚点/别名已保真或展开)+本方注入,由 YAML.stringify 序列化
          (缩进/引号/特殊字符转义交给解析库,不再手拼文本/正则注入) */
       const D = subBlocks.data;
@@ -914,7 +918,7 @@ function genConfigYaml() {
             return true;
           });
         }
-        if (dropM || dropG || dropR) console.log('[小海关] 直通悬空清理: 组成员-' + dropM + ' 空组-' + dropG + ' 规则-' + dropR);
+        if (dropM || dropG || dropR) dbg('[小海关] 直通悬空清理: 组成员-' + dropM + ' 空组-' + dropG + ' 规则-' + dropR);
       }
       y += '\n# ===== 订阅策略直通(v' + V + '): 订阅策略经真实 YAML 解析后生效 =====\n';
       y += subYaml(D) + '\n';
@@ -981,7 +985,7 @@ function genConfigYaml() {
           });
         });
         if (mergedPx.length) D.proxies = mergedPx;
-        console.log('[小海关] 融合已开启: 节点池 ' + D.proxies.length + '(含全部订阅,前缀标记)');
+        dbg('[小海关] 融合已开启: 节点池 ' + D.proxies.length + '(含全部订阅,前缀标记)');
       }
       /* 订阅节点名(结构化提取;名称含逗号/引号/特殊字符均由解析器保证正确) */
       const subNodeNames = (Array.isArray(D.proxies) ? D.proxies : [])
@@ -1052,7 +1056,7 @@ function genConfigYaml() {
         if (Array.isArray(g.proxies) && !g.proxies.length && !g.use) return; /* 清后空组且无 use → 整组丢弃 */
         keptGrp.push(g);
       });
-      if (dropGrpMemberN.n) console.log('[小海关] 合并模式: 订阅组悬空成员清理 ' + dropGrpMemberN.n + ' 个(被过滤节点/失效引用)');
+      if (dropGrpMemberN.n) dbg('[小海关] 合并模式: 订阅组悬空成员清理 ' + dropGrpMemberN.n + ' 个(被过滤节点/失效引用)');
       /* 订阅规则: 基于解析后的规则字符串。保守结构化拆分(已知简单类型),复杂逻辑规则
          (SUB-RULE/逻辑规则/含额外参数)保持原文透传并计数——不再按逗号盲拆(F05) */
       const localRules = rules.slice(0, -1); /* 去掉自建 MATCH */
@@ -1113,7 +1117,7 @@ function genConfigYaml() {
         seen.add(key);
         subRules.push(t);
       });
-      console.log('[小海关] 合并模式: 本地规则 ' + localRules.length + ' + 订阅 ' + subRules.length + '(重复略 ' + dupN + ',目标失效略 ' + dropN + ',私网改REJECT ' + rwN + ',复杂规则保真 ' + keptComplex + (rwFusN ? ',融合裸名改写 ' + rwFusN : '') + ';订阅组保留 ' + keptGrp.length + ')');
+      dbg('[小海关] 合并模式: 本地规则 ' + localRules.length + ' + 订阅 ' + subRules.length + '(重复略 ' + dupN + ',目标失效略 ' + dropN + ',私网改REJECT ' + rwN + ',复杂规则保真 ' + keptComplex + (rwFusN ? ',融合裸名改写 ' + rwFusN : '') + ';订阅组保留 ' + keptGrp.length + ')');
       /* ===== 序列化 ===== */
       y += '\n# ===== 合并模式(v' + V + '): 本地骨架+订阅策略,规则本地优先 =====\n';
       /* F05: data 经 merge 展开,序列化后无别名引用——不再拼装锚点定义键(多余顶层键会污染 mihomo 配置) */
@@ -1272,7 +1276,7 @@ async function downloadSub(i) {
       if (!isNaN(ts)) sub.ui = Object.assign({ up: 0, dl: 0, total: 0 }, sub.ui || {}, { expire: Math.floor(ts.getTime() / 1000), forever: false });
     }
   }
-  if (sub.ui) console.log('[小海关] 订阅「' + sub.name + '」: ' + (sub.ui.total ? '已用 ' + humanGB((sub.ui.up + sub.ui.dl) / 1073741824) + ' / ' + humanGB(sub.ui.total / 1073741824) : '无流量信息') + (sub.ui.forever ? ', 长期有效' : sub.ui.expire ? ', 到期 ' + new Date(sub.ui.expire * 1000).toISOString().slice(0, 10) : ''));
+  if (sub.ui) dbg('[小海关] 订阅「' + sub.name + '」: ' + (sub.ui.total ? '已用 ' + humanGB((sub.ui.up + sub.ui.dl) / 1073741824) + ' / ' + humanGB(sub.ui.total / 1073741824) : '无流量信息') + (sub.ui.forever ? ', 长期有效' : sub.ui.expire ? ', 到期 ' + new Date(sub.ui.expire * 1000).toISOString().slice(0, 10) : ''));
   await run('rm -f ' + shq(hdrF), 5000);
   sub.time = nowStr().slice(0, 16);
   HS_SUBINFO_ALL = undefined; HS_SUB_RAW = ''; HS_SUB_RAW_KEY = ''; HS_SUB_RAW_ALL = null; /* 失效缓存强制重读(含融合全订阅缓存+订阅信息,审查问题3) */
@@ -1826,7 +1830,7 @@ async function applyFw() {
   const w = await writeFile(FW, genFwSh());
   if (!w) { toast('防火墙脚本写入失败', 'red'); return false }
   const r = await run('chmod 755 ' + shq(FW) + '; sh ' + shq(FW) + ' apply 2>&1; echo "---RULES---"; iptables -t nat -S PREROUTING 2>/dev/null | grep HS_ | head -6; iptables -t nat -S HS_LAN 2>/dev/null | head -8', 15000);
-  console.log('[小海关] applyFw 结果:', r.content);
+  dbg('[小海关] applyFw 结果:', r.content);
   const fwOut = (r.content || '').split('---RULES---')[0];
   /* F13: 致命/非致命分级——命令执行错误(工具缺失/内核拒权/链操作失败/ERR 级挂载失败)即接管未生效,
      必须 return false 让调用方与用户感知(引擎在跑但流量未接管);纯 WARN/INFO 降级提示保留记录不中止(降级=尽力而为仍挂了规则) */
@@ -2900,7 +2904,7 @@ async function groupDelay(u) {
   const q = '/group/' + encodeURIComponent(hsCurGroup) + '/delay?timeout=5000&url=' + encodeURIComponent((u || 'https://www.gstatic.com/generate_204'));
   const r = await run('curl -s -m 25 -H "Authorization: Bearer ' + C.secret + '" ' + shq('http://127.0.0.1:' + C.ports.ctrl + q), 30000);
   try { const j = JSON.parse(r.content); if (j && typeof j === 'object' && !j.message) return j } catch (e) {}
-  console.log('[小海关] 组测速失败:', (r.content || '').slice(0, 120));
+  dbg('[小海关] 组测速失败:', (r.content || '').slice(0, 120));
   return null;
 }
 /* 把组测速结果刷到节点行: map 有值>0 = 延迟;map 有但<=0 或缺项 = 超时;map=null 整体失败不动 */
@@ -3486,7 +3490,7 @@ async function saveConfReload(msg) {
 /* 自建节点管理弹窗(添加+编辑+清空一体) */
 function openManualDlg() {
   try {
-  console.log('[小海关] 打开手动节点弹窗, 当前节点数:', HS_MANUAL.length);
+  dbg('[小海关] 打开手动节点弹窗, 当前节点数:', HS_MANUAL.length);
   const list = HS_MANUAL.length
     ? '<div class="hs-hint" style="margin-bottom:6px">当前 ' + HS_MANUAL.length + ' 个: ' + HS_MANUAL.slice(0, 8).map(esc).join(' / ') + (HS_MANUAL.length > 8 ? ' …' : '') + '</div>'
     : '<div class="hs-hint" style="margin-bottom:6px">当前无手动节点</div>';
@@ -4559,7 +4563,7 @@ async function upgradeAudit() {
   /* v2.8.10: 通俗化提示(用户定调)——升级入口=卡片「⬆️待升级」徽标/配置页升级卡,非重启引擎 */
   const msg = '小海关已更新到 v' + V + ',点击卡片「⬆️ 待升级」完成升级';
   if (typeof createToast === 'function') createToast('⬆️ ' + msg, 'pink', 9000);
-  else console.log('[小海关] ' + msg);
+  else dbg('[小海关] ' + msg);
   await opLog('升级对账:' + old.join(',') + '(→v' + V + '),待升级(卡片徽标入口)');
 }
 /* 升级弹卡: 打开配置页时若待升级弹一次(每页面会话一次),列更新内容+一键升级 */
@@ -5406,13 +5410,13 @@ async function onlineInstall(btn) {
       .concat([{ name: '网盘直链', url: 'https://ufitools.ikuns.top/f/DRXCufRODGnCSv5kece_wFXK/mihomo-linux-' + hsArch + '-' + (tag || 'latest') + '.gz', px: '' }])
       .concat(giteeUrl ? [{ name: 'Gitee直连', url: giteeUrl, px: '' }] : [])
       .concat(dlUrl ? dlSeq(dlUrl) : []);
-    console.log('[小海关] 下载源序列:', srcSeq.map(t => t.name).join(' → '));
+    dbg('[小海关] 下载源序列:', srcSeq.map(t => t.name).join(' → '));
     const tmpF = DIR + '/mihomo.dl.gz';
     let ok = false;
     for (let mo = 0; mo < srcSeq.length && !ok && !cancelled; mo++) {
       const t = srcSeq[mo];
       setStep(1);
-      console.log('[小海关] 下载源(' + t.name + '):', t.url, t.px || '');
+      dbg('[小海关] 下载源(' + t.name + '):', t.url, t.px || '');
       setTxt('连接源 ' + (mo + 1) + '/' + srcSeq.length + ': ' + esc(t.name) + (info.tag ? ' · v' + esc(info.tag.slice(1)) : ''));
       await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.dl.exit') + ' ' + shq(DIR + '/.dl.pid') + '; nohup sh -c \'curl -sLf --connect-timeout 8 ' + (t.px ? '-x ' + shq(t.px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(t.url) + ' 2>/dev/null & echo $! > ' + shq(DIR + '/.dl.pid') + '; wait $!; echo $? > ' + shq(DIR + '/.dl.exit') + '\' >/dev/null 2>&1 &', 5000); /* F10: 加 -f——HTTP 4xx/5xx 时 curl exit 22(非0)且不落盘错误页,按 exit 切源;否则 404 大页会 exit 0 被当成功; F11: 记录自有 curl PID($!+wait),清理只杀自有 */
       setStep(2);
@@ -5426,7 +5430,7 @@ async function onlineInstall(btn) {
              修复快速完成(首轮 1.5s 内 exit 0 但 lastSz 仍 -1)被误判失败并耗尽全部源的缺陷 */
           const finR = await run('wc -c < ' + shq(tmpF) + ' 2>/dev/null', 3000);
           const finSz = pInt(finR);
-          console.log('[小海关] 源', t.name, 'exit:', exitCode, 'finSz:', finSz, 'ok:', exitCode === '0' && finSz > 1024);
+          dbg('[小海关] 源', t.name, 'exit:', exitCode, 'finSz:', finSz, 'ok:', exitCode === '0' && finSz > 1024);
           if (exitCode === '0' && finSz > 1024) { ok = true; if (totalSz > 0) setFill(100) }
           else if (exitCode !== '0') { setTxt(esc(t.name) + ' 失败(exit ' + exitCode + '),换下一个源…') }
           else { setTxt(esc(t.name) + ' 下载不完整(' + finSz + 'B),换下一个源…') }
@@ -6306,9 +6310,9 @@ function renderAll() {
 }
 async function init() {
   try {
-  console.log('[小海关] init 开始');
+  dbg('[小海关] init 开始');
   injectCss(); buildModals();
-  console.log('[小海关] 弹窗已创建');
+  dbg('[小海关] 弹窗已创建');
   /* ZWRT(文档 §3): UFI_DATA 字段不保证存在(lanIP() 已自带判空+默认兜底),就绪等待改锚点 waitFor */
   const host = await waitFor('.functions-container', 10000);
   const card = document.createElement('div');
@@ -6318,7 +6322,7 @@ async function init() {
   await collectStatus();
   /* v2.9.0 场景4: 首次安装引导——零配置(无内核/无订阅/无运行记录)时弹 5 步向导 */
   if (!ST.bin && !(C.subs || []).length && !ST.running && !(C.devices || []).length) {
-    console.log('[小海关] 检测到首次安装,打开新手引导');
+    dbg('[小海关] 检测到首次安装,打开新手引导');
     openFirstRunGuide();
   }
   await checkResidue();
@@ -6329,7 +6333,7 @@ async function init() {
     await wait(1500); /* 等 1.5s 后复查,排除启动瞬间 pidof 暂时为空的情况 */
     await collectStatus();
     if (!ST.running && ST.residue) {
-      console.log('[小海关] 二次确认:引擎确实未运行,清理孤儿规则');
+      dbg('[小海关] 二次确认:引擎确实未运行,清理孤儿规则');
       await fwClean();
       await checkResidue();
       /* 审查 P1-2: 自愈可见化——用户打开面板时应看到已自动清理(此前仅 console,孤儿黑洞期间用户无感知) */
@@ -6338,7 +6342,7 @@ async function init() {
     }
   }
   renderCard();
-  console.log('[小海关] init 完成');
+  dbg('[小海关] init 完成');
   } catch (e) {
     console.error('[小海关] init 异常:', e);
     /* F01-R-007.B: 初始化失败必须在卡片渲染可读错误(可重试),不再只写 console;
