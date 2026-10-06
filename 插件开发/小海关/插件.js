@@ -48,12 +48,13 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.9.52'; /* v2.9.52: 诊断修复交互重做——ET共存误报根修(iptables回显是展开后网段,grep变量名恒0)+单项说明弹窗+忽略机制 */
+const V = '2.9.53'; /* v2.9.53: 分流图第⑤层兜底实走节点显示根修——provider 节点不在 /proxies 字典致链解析首跳即断(恒只剩组名),断链补 now 终点+providers 查延迟,胶囊动态显示"节点 · 延迟" */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
+  '2.9.53': '分流图第⑤层「兜底」显示实走节点根修(真机:恒显示"节点选择"不知道流量去哪):订阅节点多为 proxy-provider 引入,不在 /proxies 字典(实测字典仅 11 键全为组/内置,组 now 指向的节点查无此键)——链解析在 P[now] 首跳即断,链永远只剩组名;现断链时把 now 终点补入链,并到 /providers/proxies 找该节点取延迟/存活;第⑤层胶囊动态显示「节点 · 延迟ms」,全链(组→组→节点)留详情卡,未就绪明确标"读取中"不再伪装终态',
   '2.9.52': '诊断修复交互重做+ET共存误报根修:①「ET组网共存·排除规则未挂载」系恒误报——旧判据 grep 防火墙脚本 shell 变量名(ETNETS等),iptables 回显的是展开后真实网段,字面量永远 0(WebSSH 实证:HS_LAN 7条/HS_UDP 3条排除在位);改判 state.json 真实网段与打洞端口 ②报告里点修复项弹说明窗——讲清现象/影响/动作与取舍,不引导必须修 ③「忽略此项」:忽略后不计警示,报告列表随时取消忽略 ④一键修复不再收忽略项',
   '2.9.51': '点数字展开回调丝滑档(注水.5s/行渐.34s/延迟阶梯.12-.32s,总感知<0.7s)——1.5s 慢档保留给折叠面板/水流填充/添加区',
   '2.9.50': '动画拉到 1.5s 档(注水1.5s/行渐1.05s/折叠1.35s/填充1.1s)+修添加区遮挡复发(repanel 改确定性高度计算,不采过渡中间值)',
@@ -3840,16 +3841,30 @@ async function etCheck() {
 /* 查看订阅全部节点(9090 provider API,含延迟) */
 
 /* ===== v2.9.30 卡内活控件挂载(真机反馈: 详情卡按钮应触发真实交互,弃锚点跳转) ===== */
-async function riverLiveExit() { /* v2.9.43: 兜底出口实测——MATCH 规则经组链解析到当前选中节点+延迟(用户实锢: 只显示"节点选择"不知道流量去哪) */
+async function riverLiveExit() { /* v2.9.43: 兜底出口实测——MATCH 规则经组链解析到当前选中节点+延迟(用户实锢: 只显示"节点选择"不知道流量去哪)
+   v2.9.53: 根修断链——订阅节点多为 proxy-provider 引入,不在 /proxies 字典(实测 11 键全为组/内置,now 指向的节点查无此键),
+   旧 while 在 P[now] 处即断,链永远只剩组名(真机复现:胶囊恒"兜底 🚀 节点选择");现断链时把 now 终点补入链,
+   并到 /providers/proxies 找该节点拿延迟/存活 */
   const px = await apiGet('/proxies');
   if (!px || !px.proxies) return null;
   const P = px.proxies;
   const entry = hsMainGroup();
   const chain = []; let cur = entry, d = 0;
   while (P[cur] && d < 6) { chain.push(cur); if (!P[cur].now) break; cur = P[cur].now; d++ }
-  const fp = P[cur];
-  const delay = fp && fp.history && fp.history.length ? fp.history[fp.history.length - 1].delay : 0;
-  return { chain: chain.join(' → ') + (delay ? ' (' + delay + 'ms)' : ''), final: cur, alive: !!(fp && fp.alive !== false) };
+  if (!P[cur] && chain.length && cur) chain.push(cur); /* v2.9.53: now 终点(provider 节点不在字典)补入链 */
+  let fp = P[cur] || null, delay = fp && fp.history && fp.history.length ? fp.history[fp.history.length - 1].delay : 0, alive = !!(fp && fp.alive !== false);
+  if (!fp) { /* provider 节点: 到 /providers/proxies 按名找延迟/存活 */
+    try {
+      const pv = await apiGet('/providers/proxies');
+      const all = (pv && pv.providers) ? Object.keys(pv.providers).map(k => pv.providers[k]) : [];
+      for (const pr of all) {
+        const hit = (pr.proxies || {})[cur] || (Array.isArray(pr.proxies) ? pr.proxies.find(x => x && x.name === cur) : null);
+        if (hit) { fp = hit; delay = hit.history && hit.history.length ? hit.history[hit.history.length - 1].delay : 0; alive = hit.alive !== false; break }
+      }
+    } catch (e) { }
+  }
+  const final = cur;
+  return { chain: chain.join(' → ') + (delay ? ' (' + delay + 'ms)' : ''), finalTxt: final + (delay ? ' · ' + delay + 'ms' : '') + (alive ? '' : ' ·未测活'), final: final, alive: alive };
 }
 riverMountLive._edit = null; riverMountLive._tgt = null; riverMountLive._zone = null; /* v2.9.44: 编辑态/回填目标/输入区开闭记忆 */
 function riverMountLive(kind, el) {

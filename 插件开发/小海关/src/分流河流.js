@@ -43,11 +43,15 @@ function rvNodes(ctx) {
     rows: [] /* v2.9.34: 同 ex——清单唯一展示在活控件区 */
       .concat(FC.length > 5 ? [['…', '共 ' + FC.length + ' 条']] : []),
     live: 'fc' });
-  const exit = (ctx.exitLive && ctx.exitLive.chain) ? ctx.exitLive.chain : ((C.policySrc === 'self') ? '🚀 节点选择' : '订阅出口组(读取中)'); /* v2.9.43: 兜底全链实测(组→组→节点+延迟) */
-  N.push({ key: 'rest', icon: '🌐', name: '其余流量', short: '其余', mid: '其余流量', color: '#7fc9f2', flow: 'rule', ft: '订阅规则', zone: 'b', laneTxt: '小海关引擎', exit: exit,
-    sub: '订阅规则 · 兜底 ' + (ctx.exitLive ? ctx.exitLive.final : '…'), subS: exit, /* v2.9.43: 副标=当前节点 */
+  const exL = ctx.exitLive;
+  /* v2.9.53: 胶囊=最终实走节点+延迟(短,riverLiveExit.finalTxt);全链留详情卡 rows。
+     未就绪明确标"读取中"(旧版回落组名字面量,用户误以为终态=不知道流量去哪的投诉源) */
+  const exitCap = exL ? (exL.finalTxt || exL.chain) : ((C.policySrc === 'self') ? '🚀 节点选择 · 读取中' : '订阅出口组 · 读取中');
+  const exitChain = exL ? exL.chain : exitCap;
+  N.push({ key: 'rest', icon: '🌐', name: '其余流量', short: '其余', mid: '其余流量', color: '#7fc9f2', flow: 'rule', ft: '订阅规则', zone: 'b', laneTxt: '小海关引擎', exit: exitCap,
+    sub: '订阅规则 · 兜底 ' + (exL ? exL.final : '…'), subS: exitCap, /* v2.9.43: 副标=当前节点 */
     desc: '进了引擎、且没被你自定义拦下的流量：交给订阅自带规则判断——规则可能让它直连(如国内域名)、也可能让它走代理；规则没提到的，才走兜底出口。' /* v2.9.28: 纠正「都走代理」误解(真机反馈) */,
-    rows: [['处理位置', '引擎内 · 订阅规则逐条判定'], ['策略来源', ({ self: '自建调度', merge: '合并(订阅组接入)', direct: '订阅直通' })[C.policySrc] || '—'], ['规则判向', '直连或代理由规则逐条决定,非全部代理'], ['兜底出口', exit]],
+    rows: [['处理位置', '引擎内 · 订阅规则逐条判定'], ['策略来源', ({ self: '自建调度', merge: '合并(订阅组接入)', direct: '订阅直通' })[C.policySrc] || '—'], ['规则判向', '直连或代理由规则逐条决定,非全部代理'], ['兜底出口', exitChain]],
     btns: [['切换出口(节点页)', 'pri', 'rv-node']] }); /* v2.9.30: 弃设置页跳转(真机反馈奇怪),去节点页才是出口选择语义 */
   N.forEach((n, i) => { n.no = i + 1 });
   return N;
@@ -242,7 +246,7 @@ export function riverMarkup() {
     + '<div class="hs-rvv"><div class="railwrap"><i class="railfill" id="hs_rv_rfill"></i><div class="rail"></div><i class="raildot"></i><i class="raildot r2"></i>'
     + '<div class="vcap"><span class="vdot src"></span><span class="vlab"><b>全部流量</b> 从这进来</span></div>'
     + '<div id="hs_rv_rows"></div>'
-    + '<div class="vcap"><span class="vdot end"></span><span class="vlab">兜底出口 <b id="hs_rv_exit">🚀 节点选择</b></span></div>'
+    + '<div class="vcap"><span class="vdot end"></span><span class="vlab">兜底出口 <b id="hs_rv_exit">读取中…</b></span></div>'
     + '</div></div>'
     + '<div class="hs-rvlk" id="hs_rv_lk"><i class="lkline" id="hs_rv_lkline"></i><i class="lkdot" id="hs_rv_lkdot"></i></div>'
     + '<div class="hs-rvdt" id="hs_rv_dt"><span class="hs-rvnotch" id="hs_rv_notch"></span><div id="hs_rv_dbody"></div><button class="hs-rvx" id="hs_rv_x" type="button">✕</button></div>'

@@ -9,6 +9,11 @@ const cnt = re => (SRC.match(re) || []).length;
 
 /* ========== 1. 静态断言(八项实现锚点) ========== */
 t("版本 V=三段式", /const V\s*=\s*'\d+\.\d+\.\d+'/.test(SRC));
+/* v2.9.53 分流图兜底实走节点根修 */
+t('v2.9.53 链解析断链补 now 终点(provider 节点不在字典)', SRC.includes("if (!P[cur] && chain.length && cur) chain.push(cur)"));
+t('v2.9.53 providers 取延迟/存活', SRC.includes("/providers/proxies"));
+t('v2.9.53 胶囊显示最终节点(finalTxt)+未就绪标读取中', SRC.includes('finalTxt') && SRC.includes('· 读取中') && !/id="hs_rv_exit">🚀 节点选择</.test(SRC));
+
 /* v2.9.52 诊断修复交互重做+ET共存误报根修 */
 t('v2.9.52 ET在位判据改真实网段/端口(旧字面量 grep 恒0已废)', SRC.includes("(ET_CACHE.cidrs || []).filter(c => rl.indexOf('-d ' + c + ' ') >= 0)") && !SRC.includes('grep -cE "ETNETS'));
 t('v2.9.52 单项说明弹窗(diagItemDlg+取舍引导语)', SRC.includes('async function diagItemDlg') && SRC.includes('不是必须处理') && SRC.includes('取舍项'));
