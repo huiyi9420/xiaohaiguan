@@ -48,17 +48,17 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.9.57'; /* v2.9.57(beta): 订阅有效期方案B+订阅卡片去图标——①响应头有流量数据却无 expire→自动判长期有效(中国国际机场实证) ②卡片图标全撤(徽章/流量行/meta/按钮/编辑卡共17处,用户反馈移动端按钮放不下),页头「＋添加订阅」保留 */
+const V = '2.9.58'; /* v2.9.58(beta): ET 共存 state.json 降级抽取补全——对端文件持续非法 JSON(实锢:ET 插件 infra_endpoints joiner 少引号,≥2 端点即恒非法)时降级对象缺 updated/tun/config_server,致「更新于 ?」恒显+TUN 行消失+防火墙 ETTUN/ETCS 兜底恒空;现降级也抽齐三字段,降级后净读重试一次救瞬态半文件,warn 会话降噪 */ /* v2.9.57(beta): 订阅有效期方案B+订阅卡片去图标——①响应头有流量数据却无 expire→自动判长期有效(中国国际机场实证) ②卡片图标全撤(徽章/流量行/meta/按钮/编辑卡共17处,用户反馈移动端按钮放不下),页头「＋添加订阅」保留 */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
+  '2.9.58': '(beta 待真机验收)ET 共存 state.json 降级抽取补全:对端文件持续非法 JSON 时(实锇:ET 插件 infra_endpoints joiner 少引号,≥2 外联端点起文件恒非法→小海关每次解析必炸恒走降级,而降级对象缺 updated/tun)「更新于 ?」恒显+TUN 网卡行消失;现降级对象补抽 tun/config_server/updated(防火墙 ETTUN/ETCS 兜底同步复活),降级后 350ms 净读重试一次救瞬态半文件,console.warn 会话只提示一次不再刷屏;ET 侧一字符根修另报',
   '2.9.57': '(beta 待真机验收)①订阅有效期方案B:服务端发了流量数据却未给 expire→自动判「长期有效」(此前此类订阅正文又无"长期/永久"字样则什么都不显示;实证:中国国际机场 expire=空+正文零线索,良心云靠正文信息节点"套餐到期：长期有效"字样兜底);正文若补抓到具体到期日期仍会覆盖为日期,自动判定可被纠正 ②订阅卡片图标全撤(徽章/流量行/meta/按钮/编辑卡 17 处):表情图标挤占按钮空间,移动端放不下(用户反馈),页头添加按钮保留',
   '2.9.56': '修复 v6 开关自诞生失效(pr 未声明+未 await)+新手引导✕复活+卸载取消语义+UDP实测异常防护',
   '2.9.55': '分流图兜底胶囊限宽(PC 真机反馈宽达 ~210px):第⑤层胶囊文本=「兜底 +出口文本」,v2.9.53 起出口含节点名+延迟(断链时甚至是全链)且宽度公式全长×9.8 无上限,长节点名直接撑爆;现按「名 · Nms[ ·未测活]」拆分,名超预算截…(延迟/存活后缀保留),总宽 13 单位封顶;宽度公式改按字符类别估宽(全宽1/ASCII .56×fs×1.1 余量,替代全长×9.8);胶囊加 title 悬停显全文,全链仍在详情卡「兜底出口」行;副标(节点名行)同步限宽;补 v2.9.53 欠的出口文本 esc(模块纪律:用户数据一律 esc)',
   '2.9.54': '移动端弹窗控件叠压根修(用户反馈+本人手机复现:节点过滤弹窗关键词输入框/地区保留/实时预览挤到一块):根因=弹窗体 .hs-mb 是被 86dvh 卡死的 flex 列且 overflow:hidden,内容超高时收缩压力全压在带 min-height:42px 的 .hs-row 上(显式 min-height 顶掉 auto 内容下限,实测行 clientH 91 vs scrollH 97),行内容溢出行盒、输入框与地区胶囊压进邻行;修复=①.hs-row 加 flex 永不压缩(全部弹窗受益) ②.hs-mb 改纵向可滚(溢出走滚动不再裁死) ③救活 v2.9.6 移动端左右边距 16→0 决策(被同优先级后定义覆盖失效,规则移回基定义之后) ④实时预览两列 ≤480px 纵排(窄屏两列胶囊省略号过重)',
-  '2.9.53': '分流图第⑤层「兜底」显示实走节点根修(真机:恒显示"节点选择"不知道流量去哪):订阅节点多为 proxy-provider 引入,不在 /proxies 字典(实测字典仅 11 键全为组/内置,组 now 指向的节点查无此键)——链解析在 P[now] 首跳即断,链永远只剩组名;现断链时把 now 终点补入链,并到 /providers/proxies 找该节点取延迟/存活;第⑤层胶囊动态显示「节点 · 延迟ms」,全链(组→组→节点)留详情卡,未就绪明确标"读取中"不再伪装终态',
 }; /* 超5版删最底(2.8.10) */
 /* 语义化版本比较: a<b 负 / 相等 0 / a>b 正 */
 function verCmp(a, b) {
@@ -1334,6 +1334,7 @@ function genStartSh() {
    iptables -m mac 逐条);⑤DNS53 经 mangle 放行到内核 dns 端口(fake-ip 域名零解析)。 */
 /* EasyTier 共存: 读 ET 1.5.0 输出的 state.json(tun/网段/打洞端口),供 genFwSh 生成防火墙排除 */
 let ET_CACHE = null;
+let ET_DEG_WARNED = false; /* v2.9.58: state.json 降级抽取的 console.warn 会话只提示一次(原每次刷新刷屏=用户困扰) */
 let ET_ERR = '';
 let ET_ERR_LOGGED = ''; /* v2.7.21: 同一错误只记一次,成功复位(用户日志实锄 9 连刷) */
 let HS_ET_SIG = ''; /* 审查 P1-1: ET 组网签名——上次 applyFw 消费时的快照,变化即重应用(仅 coexistAuto) */
@@ -1377,17 +1378,21 @@ async function readEtState() {
     } catch (e) {
       /* v2.7.21 降级抽取: ET 事件驱动覆写非原子(文档明示),撞上写入瞬间会读到半文件;
          正则抽取前部完整字段——active/cidrs/p2p_ports 在文件前部,大概率可救回 */
+      /* v2.9.58: ①降级对象补 tun/config_server/updated 抽取——对端文件持续非法 JSON 时
+         「更新于/TUN 网卡/防火墙 ETTUN·ETCS 兜底」仍完整可用(实锢:ET 插件 infra_endpoints
+         joiner 少引号致两端点起文件恒非法,降级态丢 updated=「更新于 ?」恒显) ②warn 会话降噪一次 */
       const rxBool = k => { const m = new RegExp('"' + k + '"\\s*:\\s*(true|false)').exec(txt); return m ? m[1] === 'true' : null };
       const rxArr = k => { const m = new RegExp('"' + k + '"\\s*:\\s*\\[([^\\]]*)\\]').exec(txt); return m ? m[1].split(',').map(s => s.replace(/["'\s]/g, '')).filter(Boolean) : null };
+      const rxStr = k => { const m = new RegExp('"' + k + '"\\s*:\\s*"([^"]*)"').exec(txt); return m ? m[1] : '' };
       const act = rxBool('active');
       if (act === null) { ET_ERR = '异常:' + String((e && e.message) || e).slice(0, 60); return false }
-      ET_CACHE = { version: 1, active: act, cidrs: rxArr('cidrs') || [], p2p_ports: rxArr('p2p_ports') || [], infra_endpoints: rxArr('infra_endpoints') || [], degraded: true };
-      console.warn('[小海关] ET state.json 半文件降级抽取成功(active=' + act + ')');
-      return true;
+      ET_CACHE = { version: 1, active: act, cidrs: rxArr('cidrs') || [], p2p_ports: rxArr('p2p_ports') || [], infra_endpoints: rxArr('infra_endpoints') || [], tun: rxStr('tun'), config_server: rxStr('config_server'), updated: rxStr('updated'), degraded: true };
+      if (!ET_DEG_WARNED) { ET_DEG_WARNED = true; console.warn('[小海关] ET state.json 解析失败,降级抽取(active=' + act + ')——若每次刷新都出现,多为 ET 插件 state.json 写入格式异常(本会话仅提示一次)') }
+      return 'deg'; /* v2.9.58: 降级≠成功,外层等 350ms 净读重试一次(瞬态半文件可救回净数据) */
     }
   };
   let ok = await parseOnce();
-  if (!ok) { await wait(350); ok = await parseOnce() } /* 写入瞬间撞车→等半秒重读一次(用户日志实锄连续失败场景) */
+  if (ok === 'deg') { await wait(350); if (await parseOnce() === true) ok = true } /* 净读成功覆盖降级;仍降级则保留(显示与防火墙兜底字段已齐) */
   if (!ok || !ET_CACHE) return;
   const j = ET_CACHE;
   /* v1.8.5 安全: state.json 内容零信任——cidrs 逐条过 CIDR 白名单(v4 与 v6 分桶),
