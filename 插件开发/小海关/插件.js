@@ -48,17 +48,17 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.9.56'; /* v2.9.56: 对抗审查修复七项+UDP实测根修(HAR实证)——tunnels.proxy 不解析 provider 节点名(400)改指 hsMainGroup() 主组三模式兼容;CRITICAL v6 开关自 v2.8.2 起 100% 失效根修(pr 未声明+未 await);新手引导✕复活循环/卸载备份步恒假/probeUdpViaTunnel 三处/apiPutSlow 30s+失败详情;六处修复代码在入口文件,src/ 模块化拆分时严禁丢;用户真机验收通过转正上架 */
+const V = '2.9.57'; /* v2.9.57(beta): 订阅有效期方案B+订阅卡片去图标——①响应头有流量数据却无 expire→自动判长期有效(中国国际机场实证) ②卡片图标全撤(徽章/流量行/meta/按钮/编辑卡共17处,用户反馈移动端按钮放不下),页头「＋添加订阅」保留 */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
+  '2.9.57': '(beta 待真机验收)①订阅有效期方案B:服务端发了流量数据却未给 expire→自动判「长期有效」(此前此类订阅正文又无"长期/永久"字样则什么都不显示;实证:中国国际机场 expire=空+正文零线索,良心云靠正文信息节点"套餐到期：长期有效"字样兜底);正文若补抓到具体到期日期仍会覆盖为日期,自动判定可被纠正 ②订阅卡片图标全撤(徽章/流量行/meta/按钮/编辑卡 17 处):表情图标挤占按钮空间,移动端放不下(用户反馈),页头添加按钮保留',
   '2.9.56': '修复 v6 开关自诞生失效(pr 未声明+未 await)+新手引导✕复活+卸载取消语义+UDP实测异常防护',
   '2.9.55': '分流图兜底胶囊限宽(PC 真机反馈宽达 ~210px):第⑤层胶囊文本=「兜底 +出口文本」,v2.9.53 起出口含节点名+延迟(断链时甚至是全链)且宽度公式全长×9.8 无上限,长节点名直接撑爆;现按「名 · Nms[ ·未测活]」拆分,名超预算截…(延迟/存活后缀保留),总宽 13 单位封顶;宽度公式改按字符类别估宽(全宽1/ASCII .56×fs×1.1 余量,替代全长×9.8);胶囊加 title 悬停显全文,全链仍在详情卡「兜底出口」行;副标(节点名行)同步限宽;补 v2.9.53 欠的出口文本 esc(模块纪律:用户数据一律 esc)',
   '2.9.54': '移动端弹窗控件叠压根修(用户反馈+本人手机复现:节点过滤弹窗关键词输入框/地区保留/实时预览挤到一块):根因=弹窗体 .hs-mb 是被 86dvh 卡死的 flex 列且 overflow:hidden,内容超高时收缩压力全压在带 min-height:42px 的 .hs-row 上(显式 min-height 顶掉 auto 内容下限,实测行 clientH 91 vs scrollH 97),行内容溢出行盒、输入框与地区胶囊压进邻行;修复=①.hs-row 加 flex 永不压缩(全部弹窗受益) ②.hs-mb 改纵向可滚(溢出走滚动不再裁死) ③救活 v2.9.6 移动端左右边距 16→0 决策(被同优先级后定义覆盖失效,规则移回基定义之后) ④实时预览两列 ≤480px 纵排(窄屏两列胶囊省略号过重)',
   '2.9.53': '分流图第⑤层「兜底」显示实走节点根修(真机:恒显示"节点选择"不知道流量去哪):订阅节点多为 proxy-provider 引入,不在 /proxies 字典(实测字典仅 11 键全为组/内置,组 now 指向的节点查无此键)——链解析在 P[now] 首跳即断,链永远只剩组名;现断链时把 now 终点补入链,并到 /providers/proxies 找该节点取延迟/存活;第⑤层胶囊动态显示「节点 · 延迟ms」,全链(组→组→节点)留详情卡,未就绪明确标"读取中"不再伪装终态',
-  '2.9.52': '诊断修复交互重做+ET共存误报根修:①「ET组网共存·排除规则未挂载」系恒误报——旧判据 grep 防火墙脚本 shell 变量名(ETNETS等),iptables 回显的是展开后真实网段,字面量永远 0(WebSSH 实证:HS_LAN 7条/HS_UDP 3条排除在位);改判 state.json 真实网段与打洞端口 ②报告里点修复项弹说明窗——讲清现象/影响/动作与取舍,不引导必须修 ③「忽略此项」:忽略后不计警示,报告列表随时取消忽略 ④一键修复不再收忽略项',
 }; /* 超5版删最底(2.8.10) */
 /* 语义化版本比较: a<b 负 / 相等 0 / a>b 正 */
 function verCmp(a, b) {
@@ -1253,7 +1253,10 @@ async function downloadSub(i) {
     if (mu) {
       const kv = {};
       mu[1].trim().split(';').forEach(p => { const eq = p.indexOf('='); if (eq > 0) { const k = p.slice(0, eq).trim(); const v = parseInt(p.slice(eq + 1).trim(), 10); if (k && !isNaN(v)) kv[k] = v } });
-      sub.ui = { up: kv.upload || 0, dl: kv.download || 0, total: kv.total || 0, expire: kv.expire || 0, forever: false };
+      /* v2.9.57 方案B(用户定): 服务端主动发了流量数据却未给 expire → 自动判长期有效
+         (实证: 中国国际机场 expire=空且正文零线索恒空显;良心云靠正文"长期"字样命中兜底才显示)。
+         若正文补抓到具体到期日期,下方分支仍覆盖为日期+forever:false,自动判定可被纠正 */
+      sub.ui = { up: kv.upload || 0, dl: kv.download || 0, total: kv.total || 0, expire: kv.expire || 0, forever: !kv.expire && (kv.total > 0 || kv.upload > 0 || kv.download > 0) };
     } else sub.ui = null; /* 本次无头→清旧值(机场可能停发) */
   } catch (e) { /* 头解析失败不影响下载结果 */ }
   /* v2.7.15 到期文本补抓(头无 expire 时): 全文已在手,JS 正则抓「套餐到期/到期时间/长期/永久」
@@ -3621,18 +3624,18 @@ if (!C.subs.length && !HS_SUB_NEW) h += '<div class="hs-hint" style="margin-bott
       /* v2.7.16 定稿: 进度条下一行三数并排(已用/剩余/总量),剩余不再单独占位 */
       flowTxt = '已用 ' + humanGB(usedGB) + ' · 剩余 ' + humanGB(Math.max(0, info.totalGB - usedGB)) + ' · 总量 ' + humanGB(info.totalGB);
     } else if (info && info.left) {
-      flowTxt = '⧇ 剩余 ' + esc(info.left);
+      flowTxt = '剩余 ' + esc(info.left);
     }
     const hot = fillPct >= 90;
     /* 到期展示: 还剩N天(大字)+日期(小字);≤7天红 ≤30天蓝;长期绿徽章;无则不显示 */
     /* 到期展示(v2.7.5 用户定稿): 右上角——长期有效绿徽章/日期+剩余天数;≤7天红 */
     let expireHtml = '';
-    if (info && info.forever && !info.expire) expireHtml = '<span style="flex:none;font-size:.68rem;color:#8fe39a;border:1px solid rgba(102,187,106,.45);border-radius:6px;padding:2px 9px">♾ 长期有效</span>';
+    if (info && info.forever && !info.expire) expireHtml = '<span style="flex:none;font-size:.68rem;color:#8fe39a;border:1px solid rgba(102,187,106,.45);border-radius:6px;padding:2px 9px">长期有效</span>';
     else if (info && info.expire) {
       const d = info.days;
       const col = d == null ? '#b3bdcb' : d <= 7 ? '#e57373' : d <= 30 ? '#7fc9f2' : '#b3bdcb';
       const dTxt = d == null ? esc(info.expire) : d <= 0 ? '已到期' : esc(info.expire) + ' · 还剩' + (d >= 30 ? Math.round(d / 7) + '周' : d + '天');
-      expireHtml = '<span style="flex:none;font-size:.68rem;color:' + col + ';border:1px solid ' + (d != null && d <= 7 ? 'rgba(229,115,115,.5)' : 'rgba(255,255,255,.18)') + ';border-radius:6px;padding:2px 9px">⏳ ' + dTxt + '</span>';
+      expireHtml = '<span style="flex:none;font-size:.68rem;color:' + col + ';border:1px solid ' + (d != null && d <= 7 ? 'rgba(229,115,115,.5)' : 'rgba(255,255,255,.18)') + ';border-radius:6px;padding:2px 9px">' + dTxt + '</span>';
     }
     /* v2.7.0 卡片化(原型评审定稿): 左色条激活态/流量条/到期徽章/操作行 */
     /* v2.7.3 PC 宽视图重排(用户二轮 UI 反馈): 名称不截断(PC 宽度足够)、字号整体放大、
@@ -3641,10 +3644,10 @@ if (!C.subs.length && !HS_SUB_NEW) h += '<div class="hs-hint" style="margin-bott
     + '<div style="display:flex;align-items:center;gap:8px">'
     + '<span class="hs-dot ' + (i === C.activeSub ? 'g' : 'o') + '" style="flex:none;width:10px;height:10px"></span>'
     + '<span style="font-size:1rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(sb.name) + '</span>'
-    + (i === C.activeSub ? '<span style="flex:none;font-size:.68rem;color:' + (fuseOn ? '#ffb74d' : '#7fc9f2') + ';border:1px solid ' + (fuseOn ? 'rgba(255,183,77,.5)' : 'rgba(127,201,242,.5)') + ';border-radius:6px;padding:2px 9px">' + (fuseOn ? '⭐ 规则基准' : '✓ 使用中') + '</span>' : '')
-    + (fuseOn ? '<span style="flex:none;font-size:.68rem;color:#8fe39a;border:1px solid rgba(102,187,106,.45);border-radius:6px;padding:2px 9px">✓ 融合中</span>' : '')
+    + (i === C.activeSub ? '<span style="flex:none;font-size:.68rem;color:' + (fuseOn ? '#ffb74d' : '#7fc9f2') + ';border:1px solid ' + (fuseOn ? 'rgba(255,183,77,.5)' : 'rgba(127,201,242,.5)') + ';border-radius:6px;padding:2px 9px">' + (fuseOn ? '规则基准' : '使用中') + '</span>' : '')
+    + (fuseOn ? '<span style="flex:none;font-size:.68rem;color:#8fe39a;border:1px solid rgba(102,187,106,.45);border-radius:6px;padding:2px 9px">融合中</span>' : '')
     + expireHtml
-    + (hot ? '<span style="flex:none;font-size:.68rem;color:#ffb74d;border:1px solid rgba(255,183,77,.45);border-radius:6px;padding:2px 9px">⚠ 流量将尽</span>' : '')
+    + (hot ? '<span style="flex:none;font-size:.68rem;color:#ffb74d;border:1px solid rgba(255,183,77,.45);border-radius:6px;padding:2px 9px">流量将尽</span>' : '')
     + '</div>'
     + '<div class="hs-hint" style="font-size:.7rem;margin:5px 0 3px">' + esc(sb.url.replace(/^(https?:\/\/[^\/]+).*$/, '$1/***')) + '</div>'
     + (fillPct > 0 || flowTxt
@@ -3652,17 +3655,17 @@ if (!C.subs.length && !HS_SUB_NEW) h += '<div class="hs-hint" style="margin-bott
         + '<div style="font-size:.72rem;color:' + (hot ? '#ffb74d' : '#b3bdcb') + ';margin-top:3px">' + flowTxt + '</div>'
       : '')
     + '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;font-size:.74rem;color:#b3bdcb;margin-top:8px">'
-    + '<span>📄 ' + (sb.nodes || (info && info.nodes != null && info.nodes > 0 ? info.nodes : 0) || '…') + ' 节点</span>'
-    + (subFilterCustom(sb.filter) ? '<span style="opacity:.75">⚙ 已过滤</span>' : '')
-    + '<span>🕐 ' + esc(sb.time || '') + (stale ? ' <span style="color:' + (age > 72 ? '#e57373' : '#ffb74d') + '">' + (age >= 48 ? Math.floor(age / 24) + '天' : age + 'h') + '未更新</span>' : '') + '</span>'
+    + '<span>' + (sb.nodes || (info && info.nodes != null && info.nodes > 0 ? info.nodes : 0) || '…') + ' 节点</span>'
+    + (subFilterCustom(sb.filter) ? '<span style="opacity:.75">已过滤</span>' : '')
+    + '<span>' + esc(sb.time || '') + (stale ? ' <span style="color:' + (age > 72 ? '#e57373' : '#ffb74d') + '">' + (age >= 48 ? Math.floor(age / 24) + '天' : age + 'h') + '未更新</span>' : '') + '</span>'
     + (info && (info.left || info.expire) ? '<span style="opacity:.6;font-size:.64rem">流量/到期为上次更新快照</span>' : '')
     + '</div>'
     + '<div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">'
-    + (i === C.activeSub ? '' : '<button class="btn hs-sm ' + (fuseOn ? '' : 'hs-pri') + '" data-subuse="' + i + '" title="' + (fuseOn ? '切换分流规则来源(策略组/分类规则跟它走,节点池不变)' : '切换当前生效订阅') + '">' + (fuseOn ? '⭐ 设为基准' : '✅ 启用') + '</button>')
-    + '<button class="btn hs-sm" data-subupd="' + i + '">⟳ 更新</button>'
-    + '<button class="btn hs-sm" data-subflt="' + i + '" title="过滤垃圾节点(信息/中转/关键词/地区)">⚙ 过滤</button>'
-    + '<button class="btn hs-sm" data-subedit="' + i + '">✏️ 编辑</button>'
-    + '<button class="btn hs-sm hs-dgr" data-subdel="' + i + '">🗑 删除</button>'
+    + (i === C.activeSub ? '' : '<button class="btn hs-sm ' + (fuseOn ? '' : 'hs-pri') + '" data-subuse="' + i + '" title="' + (fuseOn ? '切换分流规则来源(策略组/分类规则跟它走,节点池不变)' : '切换当前生效订阅') + '">' + (fuseOn ? '设为基准' : '启用') + '</button>')
+    + '<button class="btn hs-sm" data-subupd="' + i + '">更新</button>'
+    + '<button class="btn hs-sm" data-subflt="' + i + '" title="过滤垃圾节点(信息/中转/关键词/地区)">过滤</button>'
+    + '<button class="btn hs-sm" data-subedit="' + i + '">编辑</button>'
+    + '<button class="btn hs-sm hs-dgr" data-subdel="' + i + '">删除</button>'
     + '</div></div>';
   });
   /* v2.7.0 多订阅融合开关: 仅合并模式有效(自建无订阅策略/直通单订阅整体生效);开启后全部订阅
@@ -3676,12 +3679,12 @@ if (!C.subs.length && !HS_SUB_NEW) h += '<div class="hs-hint" style="margin-bott
 function subEditCardHtml(i, sb) {
   const isNew = i < 0;
   return '<div class="hs-subcard active" style="border-color:rgba(127,201,242,.4)">'
-  + '<div style="font-size:.8rem;font-weight:700;color:#7fc9f2;margin-bottom:8px">' + (isNew ? '＋ 新建订阅' : '✏️ 编辑「' + esc(sb.name) + '」') + '</div>'
+  + '<div style="font-size:.8rem;font-weight:700;color:#7fc9f2;margin-bottom:8px">' + (isNew ? '新建订阅' : '编辑「' + esc(sb.name) + '」') + '</div>'
   + '<input id="hs_sub_name" placeholder="订阅名称(如:我的机场)" value="' + (sb ? esc(sb.name) : '') + '" style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(127,201,242,.35);border-radius:8px;color:#e8eaf0;padding:8px 10px;font-size:.8rem;margin-bottom:7px">'
   + '<input id="hs_sub_url" placeholder="订阅链接 https://..." value="' + (sb ? esc(sb.url) : '') + '" style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(127,201,242,.35);border-radius:8px;color:#e8eaf0;padding:8px 10px;font-size:.8rem">'
   + '<div class="hs-hint" style="font-size:.64rem;margin:6px 0 8px">' + (isNew ? '保存后自动下载并生效' : '名称随时可改;链接有变化时保存会重新下载,失败保留原链接') + '</div>'
   + '<div style="display:flex;gap:8px">'
-  + '<button class="btn hs-pri" id="hs_sub_add" style="flex:1;padding:8px">' + (isNew ? '💾 保存并下载' : '💾 保存修改') + '</button>'
+  + '<button class="btn hs-pri" id="hs_sub_add" style="flex:1;padding:8px">' + (isNew ? '保存并下载' : '保存修改') + '</button>'
   + '<button class="btn" id="hs_sub_cancel" style="padding:8px 14px">取消</button>'
   + '</div></div>';
 }
