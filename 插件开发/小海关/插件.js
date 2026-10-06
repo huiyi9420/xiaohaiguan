@@ -48,12 +48,13 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.9.55'; /* v2.9.55: 分流图兜底胶囊限宽(PC 真机反馈 ~210px 过宽)——出口文本按「名·Nms[·未测活]」拆分,名超预算截…,总宽 13 单位封顶;宽度公式改按字符类别估宽;胶囊加 title 悬停显全文,全链仍在详情卡;补出口文本 esc;同版携带 v2.9.54 移动端弹窗叠压根修(行不收缩+弹窗体可滚+窄屏预览纵排),真机验收通过转正上架 */
+const V = '2.9.56'; /* v2.9.55: 分流图兜底胶囊限宽(PC 真机反馈 ~210px 过宽)——出口文本按「名·Nms[·未测活]」拆分,名超预算截…,总宽 13 单位封顶;宽度公式改按字符类别估宽;胶囊加 title 悬停显全文,全链仍在详情卡;补出口文本 esc;同版携带 v2.9.54 移动端弹窗叠压根修(行不收缩+弹窗体可滚+窄屏预览纵排),真机验收通过转正上架 */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
+  '2.9.56': '修复 v6 开关自诞生失效(pr 未声明+未 await)+新手引导✕复活+卸载取消语义+UDP实测异常防护',
   '2.9.55': '分流图兜底胶囊限宽(PC 真机反馈宽达 ~210px):第⑤层胶囊文本=「兜底 +出口文本」,v2.9.53 起出口含节点名+延迟(断链时甚至是全链)且宽度公式全长×9.8 无上限,长节点名直接撑爆;现按「名 · Nms[ ·未测活]」拆分,名超预算截…(延迟/存活后缀保留),总宽 13 单位封顶;宽度公式改按字符类别估宽(全宽1/ASCII .56×fs×1.1 余量,替代全长×9.8);胶囊加 title 悬停显全文,全链仍在详情卡「兜底出口」行;副标(节点名行)同步限宽;补 v2.9.53 欠的出口文本 esc(模块纪律:用户数据一律 esc)',
   '2.9.54': '移动端弹窗控件叠压根修(用户反馈+本人手机复现:节点过滤弹窗关键词输入框/地区保留/实时预览挤到一块):根因=弹窗体 .hs-mb 是被 86dvh 卡死的 flex 列且 overflow:hidden,内容超高时收缩压力全压在带 min-height:42px 的 .hs-row 上(显式 min-height 顶掉 auto 内容下限,实测行 clientH 91 vs scrollH 97),行内容溢出行盒、输入框与地区胶囊压进邻行;修复=①.hs-row 加 flex 永不压缩(全部弹窗受益) ②.hs-mb 改纵向可滚(溢出走滚动不再裁死) ③救活 v2.9.6 移动端左右边距 16→0 决策(被同优先级后定义覆盖失效,规则移回基定义之后) ④实时预览两列 ≤480px 纵排(窄屏两列胶囊省略号过重)',
   '2.9.53': '分流图第⑤层「兜底」显示实走节点根修(真机:恒显示"节点选择"不知道流量去哪):订阅节点多为 proxy-provider 引入,不在 /proxies 字典(实测字典仅 11 键全为组/内置,组 now 指向的节点查无此键)——链解析在 P[now] 首跳即断,链永远只剩组名;现断链时把 now 终点补入链,并到 /providers/proxies 找该节点取延迟/存活;第⑤层胶囊动态显示「节点 · 延迟ms」,全链(组→组→节点)留详情卡,未就绪明确标"读取中"不再伪装终态',
@@ -420,15 +421,20 @@ let HS_UDP_PROBE_BUSY = false;
 /* v2.8.9: PUT /configs 是全量重载(重解析+重连 provider),真机耗时可达 4s+——apiPut 的
    curl -m 4 会切断拿不到状态码误报失败(用户实锤)。专用长超时版(15s) */
 async function apiPutSlow(path, body) {
-  const r = await run('curl -s -m 15 -X PUT -H "Authorization: Bearer ' + C.secret + '" -H "Content-Type: application/json" -w "\\n%{http_code}" -d ' + shq(JSON.stringify(body)) + ' ' + shq('http://127.0.0.1:' + C.ports.ctrl + path), 18000);
-  if (!r.success) return false;
+  /* v2.9.56b: 15s→30s(真机全量重载跑流量时远超空载手测的 8s;用户实锢注入仍偶发超时);
+     失败带回详情(非 204 时的 http_code+响应体前 120 字)供 why 展示——不再是黑盒 */
+  const r = await run('curl -s -m 30 -X PUT -H "Authorization: Bearer ' + C.secret + '" -H "Content-Type: application/json" -w "\\n%{http_code}" -d ' + shq(JSON.stringify(body)) + ' ' + shq('http://127.0.0.1:' + C.ports.ctrl + path), 34000);
+  if (!r.success) return { ok: false, why: '面板通道超时(34s)' };
   const m = (r.content || '').match(/(\d{3})\s*$/);
-  return !!m && (m[1] === '200' || m[1] === '204');
+  const code = m ? m[1] : '000';
+  if (code === '200' || code === '204') return { ok: true };
+  return { ok: false, why: 'HTTP ' + code + ': ' + String(r.content || '').replace(/\s+\d{3}\s*$/, '').slice(0, 120) };
 }
 async function probeUdpViaTunnel(nodeName) {
   if (!ST.running) return { ok: false, why: '引擎未运行' };
   if (HS_UDP_PROBE_BUSY) return { ok: false, why: '已有实测进行中,请稍候' };
   HS_UDP_PROBE_BUSY = true;
+  let HS_UDP_INJECTED = false; /* v2.9.56: 仅注入成功才恢复(auditor: 早退无谓全量重载断流) */
   try {
     /* WAN 口 IP=默认路由源 IP(dnsmasq 未监听此地址的 53,tunnel 专属) */
     const w = await run("ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++)if($i==\"src\"){print $(i+1);exit}}'", 6000);
@@ -438,14 +444,17 @@ async function probeUdpViaTunnel(nodeName) {
     const baseYaml = genConfigYaml();
     if (baseYaml === null) return { ok: false, why: '配置生成失败(订阅解析异常)' };
     if (baseYaml.indexOf('\ntunnels:') >= 0) return { ok: false, why: '配置已含 tunnels,跳过(防叠加)' };
-    const tunYaml = baseYaml + '\ntunnels:\n  - network: [udp]\n    address: ' + WIP + ':53\n    target: 8.8.8.8:53\n    proxy: ' + yamlEsc(nodeName) + '\n';
+    /* v2.9.56c 根修(HAR 实锢): tunnels.proxy 只认静态 proxies/组名,不解析 provider 内节点名
+       (400 'tunnel proxy 台湾 01 not found')——改指向主策略组,流量经组到当前选中节点,语义不变 */
+    const tunYaml = baseYaml + '\ntunnels:\n  - network: [udp]\n    address: ' + WIP + ':53\n    target: 8.8.8.8:53\n    proxy: ' + yamlEsc(hsMainGroup()) + '\n';
     /* v2.8.1: payload 模式(大 JSON body)真机失败(用户实锢)——改 path 模式(写临时文件+PUT path,
        真机端到端验证过的通道);base/恢复各一份临时文件,不依赖盘上 config.yaml 状态 */
     const tunF = DIR + '/.udptun.yaml', baseF = DIR + '/.udpbase.yaml';
     const w1 = await writeFile(baseF, baseYaml), w2 = await writeFile(tunF, tunYaml);
     if (!w1 || !w2) { await run('rm -f ' + shq(tunF) + ' ' + shq(baseF), 4000); return { ok: false, why: '临时配置写入失败(磁盘?)' } }
     const put1 = await apiPutSlow('/configs?force=true', { path: tunF });
-    if (!put1) { await apiPutSlow('/configs?force=true', { path: baseF }).catch(() => { }); await run('rm -f ' + shq(tunF) + ' ' + shq(baseF), 4000); return { ok: false, why: '热重载失败(临时隧道注入)' } }
+    if (put1.ok) HS_UDP_INJECTED = true;
+    else { await apiPutSlow('/configs?force=true', { path: baseF }).catch(() => { }); await run('rm -f ' + shq(tunF) + ' ' + shq(baseF), 4000); return { ok: false, why: '隧道注入失败(' + put1.why + ')' } }
     await wait(900); /* 引擎加载 tunnel 监听 */
     /* nslookup 经 WAN:53 隧道口发真实 DNS 查询(仅标准 53 口,真机实证唯一可行探测):
        RC=0 且输出含 Address=解析成功,即节点真实转发了 UDP 往返 */
@@ -453,15 +462,22 @@ async function probeUdpViaTunnel(nodeName) {
     const mRc = /RC=(\d+)/.exec(probe.content || '');
     const rc = mRc ? parseInt(mRc[1], 10) : 1;
     return { ok: rc === 0 };
+  } catch (e) {
+    /* v2.9.56: genConfigYaml 可抛(循环锚点等)——裸调卡死 busy 永不复位(auditor) */
+    return { ok: false, why: '实测异常:' + String((e && e.message) || e).slice(0, 50) };
   } finally {
-    /* 恢复原配置: 重生成写入 base 临时文件后 PUT 其 path(与注入同通道);失败重试一次;清理临时文件 */
-    await refreshSubRaw();
-    const back = genConfigYaml();
-    if (back !== null) {
-      const bF = DIR + '/.udpbase.yaml';
-      await writeFile(bF, back);
-      const put2 = await apiPutSlow('/configs?force=true', { path: bF });
-      if (!put2) { await wait(1200); await apiPutSlow('/configs?force=true', { path: bF }).catch(() => { }); }
+    if (HS_UDP_INJECTED) { /* 仅注入成功才恢复(auditor: 早退路径无谓重载断流) */
+      try {
+        await refreshSubRaw();
+        const back = genConfigYaml();
+        if (back !== null) {
+          const bF = DIR + '/.udpbase.yaml';
+          await writeFile(bF, back);
+          const put2 = await apiPutSlow('/configs?force=true', { path: bF });
+          if (!put2.ok) { await wait(1200); const put3 = await apiPutSlow('/configs?force=true', { path: bF }).catch(() => ({ ok: false }));
+            if (!put3.ok) { toast('⚠️ UDP 实测后恢复失败(' + (put2.why || '?') + ')——引擎仍载临时隧道,建议重启引擎', 'red', 6000); await opLog('UDP实测恢复失败(' + (put2.why || '?') + '),引擎滞留隧道配置') } }
+        }
+      } catch (e) { toast('⚠️ UDP 实测恢复异常:' + String((e && e.message) || e).slice(0, 40), 'red', 6000) }
     }
     await run('rm -f ' + shq(DIR + '/.udptun.yaml') + ' ' + shq(DIR + '/.udpbase.yaml'), 4000);
     HS_UDP_PROBE_BUSY = false;
@@ -4970,12 +4986,10 @@ function bindPane(tab, p) {
       op(null, async () => { C.cnBypass = e.target.checked; await saveConf(); if (ST.running) await reapplyFw() }, '✅ 国内直通已' + (e.target.checked ? '开启' : '关闭'), '应用直通规则中…');
     };
     /* v2.8.2: IPv6 响应实验开关——开启前警告(v6 流量入引擎,CPU 代价);取消则回滚开关 */
-    const v6sw = p.querySelector('#hs_sw_v6dns'); if (v6sw) v6sw.onchange = e => {
+    const v6sw = p.querySelector('#hs_sw_v6dns'); if (v6sw) v6sw.onchange = async e => { /* v2.9.56: async+await+pr 声明(auditor 实锤:pr 未声明严格模式抛 ReferenceError+okc 未 await 恒 truthy,开关自 v2.8.2 起 100% 失效) */
       const on = e.target.checked;
-      if (on) {
-        const okc = confirmBox({ title: '开启 IPv6 响应', danger: true, okText: '仍要开启', html: '<div class="hs-hint">开启后 DNS 将回 AAAA 记录,IPv6 可通。<br>⚠ v6 流量会进入引擎处理,设备 CPU 占用可能明显上升;若日常无需 IPv6,建议保持关闭。</div>' });
-        pr = okc;
-      } else pr = true;
+      let pr = true;
+      if (on) pr = await confirmBox({ title: '开启 IPv6 响应', danger: true, okText: '仍要开启', html: '<div class="hs-hint">开启后 DNS 将回 AAAA 记录,IPv6 可通。<br>⚠ v6 流量会进入引擎处理,设备 CPU 占用可能明显上升;若日常无需 IPv6,建议保持关闭。</div>' });
       if (!pr) { e.target.checked = !on; return }
       op(null, async () => {
         C.v6Dns = on; await saveConf();
@@ -5291,7 +5305,11 @@ function renderFRG() {
       else openMgr(cur === 1 ? 'sub' : cur === 3 ? 'split' : 'ov');
     };
     /* 5 秒后自动复查(引导打开期间) */
-    if (HS_FRG) setTimeout(() => { if (HS_FRG) renderFRG() }, 5000);
+    if (HS_FRG) setTimeout(() => {
+      const box = document.getElementById('hs_modal_simple');
+      if (HS_FRG && box && box.style.display !== 'none') renderFRG();
+      else if (HS_FRG) { HS_FRG = null; firstRunDone(); } /* v2.9.56: 弹窗已被✕关闭→终结引导并落标记(auditor: 5 秒复活循环+「不会再弹」承诺落空) */
+    }, 5000);
   });
 }
 function openInstallGuide(afterFail) {
@@ -5659,12 +5677,14 @@ function renderMgrFoot() {
 async function doUninstall() {
   if (HS_UPGRADING) { toast('⬆️ 升级进行中,请等待完成后再卸载', 'pink'); return }
   /* v2.9.0 场景3: 备份引导前置为独立一步(用户可选备份/不备份,再进卸载确认) */
+  /* v2.9.56: confirmBox 三路=OK true/取消✕ false——备份步改双按钮语义:
+     [导出备份并继续]=true / [不备份,直接卸载]=经二段确认 / ✕ 或取消=终止卸载 */
   const bak = await confirmBox({
-    title: '📦 卸载前备份', okText: '📦 导出备份并继续', cancelText: '不备份,直接卸载',
-    html: '<div class="hs-hint">建议先导出配置备份(订阅/白名单/线路/分流清单/端口)——重装时导入即可恢复全部设置。<br>点右上 ✕ 取消卸载。</div>'
+    title: '📦 卸载前备份', okText: '📦 导出备份并继续', cancelText: '❌ 取消卸载',
+    html: '<div class="hs-hint">建议先导出配置备份(订阅/白名单/线路/分流清单/端口)——重装时导入即可恢复全部设置。</div><div class="hs-hint" style="margin-top:6px">取消或点 ✕ = 不卸载</div>'
   });
-  if (bak === null) return;
-  if (bak) await exportConf();
+  if (!bak) { toast('已取消卸载', 'green'); return }
+  await exportConf();
   const ok = await confirmBox({
     title: '卸载 小海关', danger: true, okText: '卸载', countdown: 0,
     html: '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem;align-items:flex-start"><input type="checkbox" checked id="hs_un_core"><span><b>停止进程,删除内核与规则/自启</b><div class="hs-hint">mihomo 二进制 + HS_* 链 + boot.sh 自启行</div></span></div>'

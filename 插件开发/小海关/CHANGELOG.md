@@ -17,6 +17,21 @@
 
 ---
 
+## [2.9.56] - 2026-10-06 · 对抗审查修复七项+UDP实测根修(HAR实证) · commit `d8c63d1`
+
+### 根修(用户浏览器 HAR 抓包实证)
+- **UDP 实测"热重载失败(临时隧道注入)"真正根因**: HAR 捕获引擎 400 `tunnel proxy 台湾 01 not found`——Mihomo 的 `tunnels.proxy` 只认静态 proxies/组名,**不解析 provider 内节点名**(订阅节点在 providers/subN.yaml);此前真机验证用直连订阅(节点静态内嵌)故未暴露,provider 模式(自建/合并)必现。修复:tunnels.proxy 改指向 `hsMainGroup()` 主策略组,流量经组到当前选中节点,语义不变且三模式全兼容
+
+### 对抗审查(auditor)修复——CRITICAL/HIGH
+- [CRITICAL] **v6 开关(IPv6 响应)自 v2.8.2 起 100% 失效**: 处理器 `pr` 未声明(ESM 严格模式抛 ReferenceError)+ `confirmBox` 未 await(Promise 恒 truthy),开启/关闭双分支全炸——`async e =>`+`let pr=true`+`await confirmBox(...)` 根修
+- [HIGH] 新手引导弹窗 ✕ 关不掉: 5 秒复活循环+「不会再弹」承诺落空——重入前探测弹窗可见性,已关→终结+落 localStorage 标记
+- [HIGH] 卸载备份步 `bak===null` 恒假(confirmBox ✕ 也返回 false,✕ 被折算成「不备份直接卸载」)——改双按钮:「导出备份并继续」/「❌ 取消卸载」(✕=取消)
+- [MEDIUM] probeUdpViaTunnel: ①早退路径无谓全量重载断流(`HS_UDP_INJECTED` 标志,仅注入成功才恢复) ②恢复失败静默(toast+opLog 明示) ③genConfigYaml 裸调卡死 busy(catch 兜底)
+- [MEDIUM] apiPutSlow: curl 15s→30s/面板 18s→34s(真机跑流量时全量重载远超空载手测);失败不再是黑盒——非 204 带回 `HTTP 状态码+引擎响应体前 120 字`
+
+### 已知遗留(auditor 清单,待后续版本)
+- runDiag 裸调 buildDiagItems 可卡死诊断 run 态 / connQuickAdd 对 v6 目标 no-op 却报成功 / saveConfReload 丢弃 writeFile 结果(盘满分叉) / 9 处 apiPut 仍用旧通道(-m 4+payload,待统一 apiPutSlow) / ET tun+config_server 未过白名单且 etSig 缺两维度 / expandMerge 循环锚点栈溢出面 / npm test 因 BigInt 崩溃(v2.9.29 引入 0n 字面量) / 完整报告: reviews/v2.9.6-beta审查.md(subagent-artifacts)
+
 ## [2.9.55] - 2026-10-06 · 分流图兜底胶囊限宽（含 2.9.54 转正） · commit `a8eb741`
 
 > **已转正上架**（2026-10-06 用户真机验收"这版看着正常了"）：官方件 `上架插件/小海关插件.txt` = v2.9.55（SHA256 `abff8848…`）；本版携带 v2.9.54 修复一同转正（beta 过程产物 `小海关插件-2.9.54beta.txt`/`-2.9.55beta.txt` 留档）。开源仓 README 徽章同步 2.9.55。
