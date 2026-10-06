@@ -65,6 +65,8 @@ ctx.deepRest = async (q, isIp) => {
   return { verdict: 'dual', why: '无显式规则命中:国内域名(geosite:cn)→直连; 海外域名→MATCH 兜底 🚀 节点选择 → 台湾02 → 走代理' };
 };
 ctx.restStats = async () => ({ total: 8214, direct: 3902, proxy: 4238, reject: 74, matchChain: '🚀 节点选择 → ♻️ 自动选优 → 台湾02 (45ms)' });
+/* v2.9.55: 兜底出口活数据模拟(真机由 riverLiveExit 提供)——故意用长节点名,供第⑤层胶囊限宽回归(真机反馈 PC 210px 过宽) */
+ctx.exitLive = { final: '🇭🇰 香港 IEPL 05', delay: 87, alive: true, finalTxt: '🇭🇰 香港 IEPL 05 · 87ms', chain: '🚀 节点选择 → ♻️ 自动选优 → 🇭🇰 香港 IEPL 05 (87ms)' };
 riverRender(ctx);
 const wb = document.getElementById('wbadge');
 const upd = () => { wb.textContent = (document.getElementById('hs_rv').dataset.mode === 'v' ? '竖版' : '横版') + ' · 容器 ' + document.getElementById('hs_rv').clientWidth + 'px' };

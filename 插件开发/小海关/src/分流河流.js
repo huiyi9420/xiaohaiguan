@@ -10,6 +10,21 @@ const RV_CY = 84, RV_VB_W = 640, RV_VB_H = 156;
 
 function rvRgba(hex, a) { const v = parseInt(hex.slice(1), 16); return 'rgba(' + ((v >> 16) & 255) + ',' + ((v >> 8) & 255) + ',' + (v & 255) + ',' + a + ')' }
 
+/* v2.9.55: 兜底胶囊限宽(PC 真机反馈 ~210px 过宽)——宽度按字符类别估算(全宽=1 单位/ASCII≈0.56,
+   fs9 下 1 单位≈9px);出口文本按「名 · Nms[ ·未测活]」拆分,名超预算截…(延迟/存活后缀保留),
+   全链仍在详情卡「兜底出口」行 + 胶囊 <title> 悬停可见;另补 v2.9.53 欠的出口文本 esc(模块纪律:用户数据一律 esc) */
+function rvEsc(t) { return String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
+function rvU(ch) { return ch.charCodeAt(0) > 0x2e7f ? 1 : 0.56 }
+function rvUnits(t) { let u = 0; for (const c of String(t)) u += rvU(c); return u }
+function rvCutU(t, max) { let u = 0, o = ''; for (const c of String(t)) { const w = rvU(c); if (u + w > max - 1) return o + '…'; o += c; u += w } return o }
+function rvPillExit(exit, budget) {
+  const raw = String(exit || '');
+  const m = /^(.*?)(?: · \d+ms)?(?: ·未测活)?$/.exec(raw);
+  const nm = m ? m[1] : raw;
+  const sfx = raw.slice(nm.length); /* 延迟/未测活后缀原样保留 */
+  return rvCutU(nm, Math.max(4, budget - rvUnits(sfx))) + sfx;
+}
+
 /* ================= 节点组装（真实数据；条件显隐；泳道归属） ================= */
 function rvNodes(ctx) {
   const { C, ST, ET, EX, FC } = ctx;
@@ -104,25 +119,27 @@ function rvBuildSvg(N, svgEl) {
   const branchDs = [];
   N.forEach((n, i) => {
     const x = xs[i], last = i === L - 1;
-    const tag = last ? ('兜底 ' + n.exit) : n.ft;
-    const ct = last ? n.subS : n.subS;
-    const tw = Math.round(tag.length * 9.8) + 16;
+    /* v2.9.55: 兜底胶囊总预算 13 单位(tw 封顶≈143 viewBox 单位,面板横版显示≈130-150px),扣除前缀「兜底 」2.56 后剩给 名+后缀 */
+    const tag = last ? ('兜底 ' + rvPillExit(n.exit, 10.4)) : n.ft;
+    const ct = last ? rvCutU(n.subS, 10.5) : n.subS; /* 副标同步限宽(同为出口文本) */
+    const tw = Math.round(rvUnits(tag) * (last ? 9 : 9.5) * 1.1) + 14; /* v2.9.55: 类别估宽(全宽1/ASCII .56 ×fs,×1.1 余量)替代全长×9.8 */
     branchDs[i] = last
       ? 'M ' + x + ' ' + (CY + 14) + ' C ' + (x + 3) + ' ' + (CY + 26) + ', ' + (x - 5) + ' ' + (CY + 33) + ', ' + (x - 6) + ' ' + (CY + 42)
       : 'M ' + x + ' ' + (CY + 14) + ' C ' + (x + 2) + ' ' + (CY + 26) + ', ' + (x - 2) + ' ' + (CY + 33) + ', ' + x + ' ' + (CY + 42);
     let px = last ? x - 6 : x;
     px = Math.round(Math.max(38 + tw / 2, Math.min(622 - tw / 2, px)));
     s += '<g class="jn" data-rvi="' + i + '">'
+      + (last ? '<title>兜底出口: ' + rvEsc(n.exit) + ' — 点开详情看全链</title>' : '')
       + '<rect class="hit" x="' + (x - 58) + '" y="20" width="116" height="134"/>'
       + '<text x="' + x + '" y="36" font-size="11.5" font-weight="600" fill="#e8eaf0" text-anchor="middle">' + n.icon + ' ' + n.mid + '</text>' /* v2.9.25: 真机反馈两字短名信息损失,恢复四字中名 */
-      + '<text x="' + x + '" y="52" font-size="9.5" fill="#8ba0bd" text-anchor="middle">' + ct + '</text>'
+      + '<text x="' + x + '" y="52" font-size="9.5" fill="#8ba0bd" text-anchor="middle">' + rvEsc(ct) + '</text>'
       + '<line x1="' + x + '" y1="57" x2="' + x + '" y2="' + (CY - 14) + '" stroke="rgba(255,255,255,.14)" stroke-width="1"/>'
       + '<circle class="nd" cx="' + x + '" cy="' + CY + '" r="12" fill="#1a2130" stroke="' + n.color + '" stroke-width="2"/>'
       + '<text x="' + x + '" y="' + (CY + 4) + '" font-size="11" font-weight="700" fill="' + n.color + '" text-anchor="middle">' + n.no + '</text>'
       + '<path d="' + branchDs[i] + '" fill="none" stroke="' + n.color + '" stroke-opacity=".14" stroke-width="4.5" stroke-linecap="round"/>' /* 支管辉光底层 */
     + '<path class="branch" d="' + branchDs[i] + '" fill="none" stroke="' + n.color + '" stroke-width="1.8"/>'
       + '<rect class="tagp" x="' + (px - tw / 2) + '" y="' + (CY + 46) + '" width="' + tw + '" height="18" rx="9" fill="' + rvRgba(n.color, .12) + '" stroke="' + rvRgba(n.color, .5) + '"/>'
-      + '<text x="' + px + '" y="' + (CY + 58.5) + '" font-size="' + (last ? 9 : 9.5) + '" font-weight="' + (last ? 600 : 400) + '" fill="' + n.color + '" text-anchor="middle">' + tag + '</text>'
+      + '<text x="' + px + '" y="' + (CY + 58.5) + '" font-size="' + (last ? 9 : 9.5) + '" font-weight="' + (last ? 600 : 400) + '" fill="' + n.color + '" text-anchor="middle">' + rvEsc(tag) + '</text>'
       + '</g>';
   });
   s += '<g><circle id="hsRvHalo" r="6.5" opacity="0"><animateMotion id="hsRvAM2" begin="indefinite" repeatCount="indefinite" dur="1.05s" path="M 0 0 L 0 1"/></circle><circle id="hsRvTrv" r="3.2" opacity="0"><animateMotion id="hsRvAM" begin="indefinite" repeatCount="indefinite" dur="1.05s" path="M 0 0 L 0 1"/></circle></g>';
