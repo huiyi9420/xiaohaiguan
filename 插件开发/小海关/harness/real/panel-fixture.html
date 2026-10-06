@@ -1,0 +1,56 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>F01 真实桥面板壳</title><style>
+/* 与旧 stub 同款最小面板样式：仅视觉，不含任何业务行为 */
+body{background:#1f2937;color:#eee;font-family:sans-serif;font-weight:bold;margin:0;padding:8px}
+button{padding:5px 10px;background:#87ceeb61;border:1px solid transparent;border-radius:8px;color:#eee;font-size:12px}
+.title{border-left:4px solid skyblue;padding-left:8px;margin:8px 0}
+.functions-container{border:1px dashed #444;padding:8px;margin-top:8px}
+.collapse{transition:height .3s}
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:99}
+.modal{background:#111827;border:1px solid #374151;border-radius:10px;padding:12px;max-width:92%;max-height:86vh;overflow:auto}
+#hs_fixture_note{position:fixed;right:4px;bottom:4px;font-size:10px;opacity:.5;font-weight:400}
+</style></head><body>
+<div class="functions-container"><div class="title">面板功能区(仿真)</div></div>
+<div id="hs_fixture_note">F01 真实桥面板壳：/api/run_shell 全部真实转发容器执行，无业务罐头</div>
+<script>
+/* 面板全局仿真：只提供文档 §3 声明的壳能力，不 mock 任何业务数据/成功结果 */
+window.UFI_DATA = { lan_ipaddr: '192.168.0.1' };
+window.KANO_baseURL = '/api';
+window.common_headers = { 'X-HS-Bridge': '__BRIDGE_TOKEN__' };
+window.__hsToasts = [];
+window.__hsConsole = [];
+window.createToast = function (t, color, delay) {
+  window.__hsToasts.push(String(t));
+  var d = document.createElement('div');
+  d.className = 'hs-fx-toast'; d.style.margin = '2px 0';
+  d.textContent = '[toast] ' + t;
+  document.getElementById('hs_fixture_toasts').appendChild(d);
+};
+window.createFixedToast = function (id, html, style) {
+  window.__hsToasts.push('[fixed] ' + String(html).replace(/<[^>]+>/g, ''));
+  var d = document.createElement('div');
+  d.id = id; d.style.margin = '2px 0';
+  d.textContent = '[fixed] ' + String(html).replace(/<[^>]+>/g, '');
+  document.getElementById('hs_fixture_toasts').appendChild(d);
+  return { el: d, close: function () { d.remove(); } };
+};
+window.showModal = function (s) { var el = document.querySelector(s); if (el) el.style.display = 'flex'; };
+window.closeModal = function (s) { var el = document.querySelector(s); if (el) el.style.display = 'none'; };
+window.collapseGen = function (btnSel, panelSel, storageKey, cb) {
+  var b = document.querySelector(btnSel), p = document.querySelector(panelSel);
+  if (!b || !p) return;
+  b.onclick = function () {
+    var open = p.dataset.name === 'open';
+    p.dataset.name = open ? 'close' : 'open';
+    p.style.height = open ? '0' : '';
+    p.style.overflow = open ? 'hidden' : '';
+    try { localStorage.setItem(storageKey, p.dataset.name); } catch (e) { }
+    if (cb) cb();
+  };
+};
+window.t = function (k, fb) { return (fb !== undefined && fb !== null) ? fb : k; };
+window.requestInterval = function (cb, ms) { var h = setInterval(cb, ms); return function () { clearInterval(h); }; };
+</script>
+<div id="hs_fixture_toasts"></div>
+<!-- 插件加载方式与生产一致：同源 <script>，无任何拦截（src 由桥注入带令牌地址） -->
+<script src="__PLUGIN_SRC__"></script>
+</body></html>

@@ -2,7 +2,23 @@
   "name": "hs-harness",
   "private": true,
   "scripts": {
-    "test": "node test_all.js"
+    "test": "node test_all.js",
+    "test:real": "node real/f01-readiness.mjs",
+    "test:real:verify": "node real/verify-repairs.mjs",
+    "test:real:f05": "node real/f05-subparse-real.mjs",
+    "test:real:f06": "node real/f06-download-real.mjs",
+    "test:real:f09": "node real/f09-linepool-real.mjs",
+    "test:real:f10": "node real/f10-install-fast-real.mjs",
+    "test:real:f11": "node real/f11-download-own-real.mjs",
+    "test:real:f12": "node real/f12-restore-real.mjs",
+    "test:real:f13": "node real/f13-failfast-real.mjs",
+    "test:real:f14": "node real/f14-bootmode-real.mjs",
+    "test:real:f15": "node real/f15-process-own-real.mjs",
+    "test:real:f07b": "node real/f07b-selector-real.mjs",
+    "test:real:f16": "node real/f16-dualstack-real.mjs",
+    "test:real:f04": "node real/f04-order-real.mjs",
+    "test:real:f0203": "node real/f0203-mac-entry-real.mjs",
+    "test:real:f1718": "node real/f1718-real.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.63.0"

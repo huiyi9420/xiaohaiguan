@@ -3,8 +3,19 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-/* 插件源码: harness/../插件.js = 插件开发/小海关/插件.js */
-const SRC = path.resolve(__dirname, '..', '插件.js');
+/* 浏览器测试加载构建后的单文件,避免直接执行 ES 模块入口。 */
+const SRC = path.resolve(__dirname, '..', '.build', '插件.js');
+const root = path.resolve(__dirname, '..');
+if (!fs.existsSync(SRC)) throw new Error('缺少构建产物,请先执行 sh 构建发行版.sh --check');
+const inputs = ['插件.js', '构建.mjs', 'package-lock.json']
+  .map(name => path.join(root, name))
+  .concat(fs.readdirSync(path.join(root, 'src')).filter(name => name.endsWith('.js')).map(name => path.join(root, 'src', name)));
+if (inputs.some(file => fs.statSync(file).mtimeMs > fs.statSync(SRC).mtimeMs)) {
+  throw new Error('构建产物已过期,请重新执行 sh 构建发行版.sh --check');
+}
+const SOURCE_TEXT = [path.join(root, '插件.js')]
+  .concat(fs.readdirSync(path.join(root, 'src')).filter(name => name.endsWith('.js')).sort().map(name => path.join(root, 'src', name)))
+  .map(file => fs.readFileSync(file, 'utf8')).join('\n');
 /* 面板 stub(file URL,路径含中文须经 pathToFileURL 编码) */
 const STUB_URL = require('url').pathToFileURL(path.resolve(__dirname, 'stub', 'hs_stub.html')).href;
 
@@ -35,4 +46,4 @@ if (!EXE) {
     + '(本机参考: ~/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-mac-arm64/chrome-headless-shell)');
 }
 
-module.exports = { SRC, STUB_URL, EXE };
+module.exports = { SRC, SOURCE_TEXT, STUB_URL, EXE };

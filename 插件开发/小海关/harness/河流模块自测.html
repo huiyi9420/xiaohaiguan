@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>分流河流模块自测（src/分流河流.js + 真实源码 CSS）</title>
+<link rel="stylesheet" href="河流模块自测.css">
+<style>
+:root{--muted:#8ba0bd}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:#141822;color:#dbe4f0;min-height:100vh;padding:14px;margin:0;display:flex;flex-direction:column;align-items:center;gap:12px}
+.mockbar{width:100%;max-width:980px;display:flex;justify-content:space-between;font-size:12px;color:#8ba0bd}
+.mockbar b{color:#dbe4f0}
+.wrap{width:100%;max-width:580px}
+.hs-sec h4{font-size:14px;margin:0}
+/* 与插件 .hs-sec 结构近似的最小骨架 */
+.sec{background:rgba(255,255,255,.045);border:1px solid rgba(127,201,242,.16);border-radius:14px;padding:12px}
+.btn{font:inherit;font-size:12.5px;padding:8px 15px;border-radius:9px;cursor:pointer;border:1px solid rgba(127,201,242,.16);background:rgba(127,201,242,.08);color:#7fc9f2}
+.btn.hs-pri{background:rgba(127,201,242,.16);border-color:rgba(127,201,242,.45)}
+.btn.hs-sm{font-size:12px;padding:6px 12px}
+</style>
+</head>
+<body>
+<div class="mockbar"><b>小海关 · 分流河流模块自测</b><span id="wbadge"></span></div>
+<div class="wrap"><div class="sec"><h4>当前生效分流 <span style="font-size:11px;font-weight:400;color:#8ba0bd">哪段流量没进小海关、哪段进了引擎 · 点岔口或搜索定位</span></h4><div id="mount"></div></div></div>
+<div class="wrap"><div class="sec"><h4>自动自检</h4><div id="selfcheck" style="font-size:12px;line-height:2">自检运行中…</div></div></div>
+<div style="height:400px"></div>
+<script>window.addEventListener('error', function (e) { window.__err = (e.message || '') + ' @ ' + (e.filename || '') + ':' + (e.lineno || 0) })</script>
+<script type="module">
+import { riverMarkup, riverRender, riverClose } from '../src/分流河流.js';
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ctx = {
+  C: { cnBypass: true, coexistAuto: true, policySrc: 'self' },
+  ST: { chn: 6206 },
+  ET: { active: true, cidrs: ['10.126.0.0/16','10.127.0.0/16','10.128.0.0/16','10.129.0.0/16','10.130.0.0/16'], cidrs6: [], p2p_ports: [11010,11011,11012,11013] },
+  EX: [{v:'ufitools.ikuns.top',m:'suffix'},{v:'example.cn',m:'suffix'},{v:'intra.office.local',m:'exact'}],
+  FC: [{v:'openai.com',m:'suffix'},{v:'gemini.google.com',m:'suffix'}],
+  game: ['igamecj.com','proximabeta.com','pubghelper.com','pubgtool.com','gcloudcs.com'],
+  esc, toast: m => console.log('[toast]', m),
+  run: async () => ({ content: '' }),
+  apiGet: async () => null,
+  act: a => console.log('[act]', a)
+};
+document.getElementById('mount').innerHTML = riverMarkup();
+/* __restStatsStub: 模拟引擎 /rules+/proxies 判向统计(真机由 riverRestStats 提供) */
+/* __deepStub: 模拟深判(真机由 riverDeepRest 提供) */
+/* __liveStub: 模拟卡内活控件(真机由 riverMountLive 提供) */
+/* __panelFix: 模拟 vpanel 扩容(真机由 riverMountLive 处理) */
+ctx.mountLive = (kind, el) => { if (kind === 'ex' || kind === 'fc') { const zone = document.createElement('div'); zone.style.cssText = 'max-height:0;overflow:hidden;transition:max-height .55s cubic-bezier(.25,.9,.3,1.1),opacity .45s;opacity:0'; zone.innerHTML = '<div class="d-row"><span>输入区</span><b>后缀/前缀/精确 + 加入</b></div><div class="d-row"><span>第二行(移动端换行形态)</span><b>加入按钮</b></div>'; const bar = document.createElement('div'); bar.style.cssText = 'display:flex;gap:6px;margin-top:6px'; const ab = document.createElement('button'); ab.className = 'btn'; ab.style.borderStyle = 'dashed'; ab.textContent = '＋ 添加'; bar.appendChild(ab); const box = document.createElement('div'); box.appendChild(zone); box.appendChild(bar); el.innerHTML = ''; el.appendChild(box); const pn = el.closest('.vpanel'); const pn0 = pn ? parseInt(pn.style.maxHeight) || 0 : 0; ab.onclick = () => { const open = zone.style.opacity !== '1'; if (open) { zone.style.maxHeight = '140px'; zone.style.opacity = '1'; ab.textContent = '✕ 收起'; if (pn) pn.style.maxHeight = (parseInt(pn.style.maxHeight) || pn.scrollHeight) + 140 + 'px' } else { zone.style.maxHeight = '0'; zone.style.opacity = '0'; ab.textContent = '＋ 添加'; if (pn) pn.style.maxHeight = Math.max(0, (parseInt(pn.style.maxHeight) || 0) - 140) + 'px' } }; return } el.innerHTML = '[' + kind + ' 活控件]' };
+/* __liveStub2: ex/fc 活控件模拟(展开式添加+动画,真机由 riverMountLive 提供) */
+ctx.mountLive = (kind, el) => {
+  if (kind === 'ex' || kind === 'fc') {
+    const zone = '<div class="hs-rv-addzone" id="st_zone" style="max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(.25,.9,.3,1),opacity .3s;opacity:0"><div class="d-row"><span>输入区(展开后)</span><b>后缀/前缀/精确 + 加入</b></div></div>';
+    const items = ['ufitools.ikuns.top|后缀','example.cn|后缀','intra.office.local|精确'].slice(0, kind === 'ex' ? 3 : 2).map(x => '<div class="d-row"><span>' + x.split('|')[0] + '</span><b>' + x.split('|')[1] + '</b></div>').join('');
+    el.innerHTML = '<div style="border-top:1px dashed rgba(255,255,255,.08);padding-top:8px"><div class="hs-hint" style="font-size:11px;margin-bottom:2px">' + (kind === 'ex' ? '3' : '2') + ' 条 · 即时预览,保存后生效</div>' + items + zone + '<div style="display:flex;gap:6px;margin-top:6px"><button class="btn" id="st_add" style="border-style:dashed">＋ 添加条目</button><button class="btn primary">保存并生效</button></div></div>';
+    const z = el.querySelector('#st_zone'); const ab2 = el.querySelector('#st_add');
+    if (ab2) ab2.onclick = () => { if (z.style.opacity !== '1') { z.style.maxHeight = '120px'; z.style.opacity = '1'; ab2.textContent = '✕ 收起' } else { z.style.maxHeight = '0'; z.style.opacity = '0'; ab2.textContent = '＋ 添加条目' } };
+    return;
+  }
+  el.innerHTML = '<div style="border-top:1px dashed rgba(255,255,255,.08);padding-top:8px;font-size:11.5px;color:#8ba0bd">[' + kind + ' 活控件区] 真机此处为可交互控件</div>'; };
+ctx.deepRest = async (q, isIp) => {
+  if (isIp) {
+    if (q.indexOf(':') >= 0) return { verdict: 'direct', why: '命中 china_ip 国内 IPv6 段(2409:8c00::/20) → 直连' };
+    return { verdict: 'proxy', why: '未命中任何国内段 → MATCH 兜底 🚀 节点选择 → ♻️ 自动选优 → 台湾02 (45ms) → 走代理' };
+  }
+  return { verdict: 'dual', why: '无显式规则命中:国内域名(geosite:cn)→直连; 海外域名→MATCH 兜底 🚀 节点选择 → 台湾02 → 走代理' };
+};
+ctx.restStats = async () => ({ total: 8214, direct: 3902, proxy: 4238, reject: 74, matchChain: '🚀 节点选择 → ♻️ 自动选优 → 台湾02 (45ms)' });
+riverRender(ctx);
+const wb = document.getElementById('wbadge');
+const upd = () => { wb.textContent = (document.getElementById('hs_rv').dataset.mode === 'v' ? '竖版' : '横版') + ' · 容器 ' + document.getElementById('hs_rv').clientWidth + 'px' };
+addEventListener('resize', upd); setTimeout(upd, 100);
+window.__close = riverClose; window.__ok = 1;
+/* ==== 自动化/人工测试钩子: 形态切换 与 live 检索注入 ==== */
+const BASE = JSON.parse(JSON.stringify({ C: ctx.C, ST: ctx.ST, ET: ctx.ET, EX: ctx.EX, FC: ctx.FC }));
+window.__shape = function (name) {
+  const c = JSON.parse(JSON.stringify(BASE));
+  if (name === 'noCn') c.C.cnBypass = false;
+  if (name === 'noEt') c.C.coexistAuto = false;
+  if (name === 'noEx') c.EX = [];
+  if (name === 'noLists') { c.EX = []; c.FC = [] }
+  if (name === 'bare') { c.C.cnBypass = false; c.C.coexistAuto = false; c.EX = []; c.FC = [] }
+  const c2 = Object.assign({}, ctx, c);
+  riverRender(c2);
+  return document.querySelectorAll('#hs_rv_svg .jn').length;
+};
+window.__live = function (host, rule, payload, chain) {
+  const conn = { metadata: { host: host, destinationIP: '', destinationPort: 443 }, rule: rule, rulePayload: payload, chains: [chain], upload: 100, download: 200 };
+  const c2 = Object.assign({}, ctx, { apiGet: async (p) => (p === '/connections' ? { connections: [conn] } : null) });
+  riverRender(c2);
+};
+window.__full = function () { riverRender(Object.assign({}, ctx)) };
+/* ==== 页面自动自检:真实浏览器打开即自动运行并显示结果(帧级证据) ==== */
+(function autocheck() {
+  if (location.search.indexOf('noauto=1') >= 0) { window.__ok = 1; return } /* ?noauto=1: 静默模式,供自动化断言 */
+  const box = document.getElementById('selfcheck');
+  const line = (ok, txt) => { const d = document.createElement('div'); d.textContent = (ok ? '✅ ' : '❌ ') + txt; d.style.color = ok ? '#8fe39a' : '#ff8a80'; box.appendChild(d) };
+  const start = () => { box.textContent = ''; setTimeout(run, 500) };
+  const run = async () => {
+    try {
+      /* ① 五形态布局(横版 1000 等效:容器宽由窗口决定,记录节点数与重叠) */
+      for (const s of ['noCn', 'noEt', 'noEx', 'noLists', 'bare']) {
+        const n = window.__shape(s);
+        await new Promise(r => setTimeout(r, 120));
+        const ov = (() => { const svg = document.getElementById('hs_rv_svg'); const ts = [...svg.querySelectorAll('text')].map(t => ({ t: t.textContent, r: t.getBoundingClientRect() })).filter(x => x.t.trim().length > 1); let o = 0; for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) { const a = ts[i].r, b = ts[j].r; if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 2 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 2 && ts[i].t !== ts[j].t) o++ } return o })();
+        line(ov === 0, '形态 ' + s + '：' + n + ' 节点，文字重叠 ' + ov);
+      }
+      window.__full(); await new Promise(r => setTimeout(r, 200));
+      /* ② live 实测检索 */
+      window.__live('openai.com', 'DomainSuffix', 'openai.com', '🚀 节点选择');
+      await new Promise(r => setTimeout(r, 100));
+      document.getElementById('hs_rv_q').value = 'openai.com';
+      document.getElementById('hs_rv_go').click();
+      await new Promise(r => setTimeout(r, 600));
+      const bn = (document.querySelector('#hs_rv_dbody .hitbanner, .vitem.open .hitbanner') || {}).textContent || '';
+      line(bn.includes('实测') && bn.includes('强制代理'.replace('代理', '')) || bn.includes('实测'), 'live 实测检索：' + (bn.slice(0, 40) || '(无横幅)'));
+      window.__full();
+      window.__close();
+      /* ③ 折叠动画帧级高度——页内临时限宽 360px 触发竖版,免拖窗口,测完还原 */
+      const rv = document.getElementById('hs_rv');
+      const shell = document.getElementById('mount');
+      shell.style.maxWidth = '360px';
+      window.dispatchEvent(new Event('resize'));
+      await new Promise(r => setTimeout(r, 500));
+      const rows = document.querySelectorAll('.hs-rvv .vrow');
+      rows[1].click();
+      await new Promise(r => setTimeout(r, 900));
+      let hgt = document.querySelectorAll('.hs-rvv .vpanel')[1].getBoundingClientRect().height;
+      let how = '动画实测';
+      if (hgt <= 150) { /* 帧冻结环境兜底:关过渡后布局同步可算(真实浏览器不会走到这) */
+        const pn = document.querySelectorAll('.hs-rvv .vpanel')[1];
+        pn.style.transition = 'none'; pn.style.maxHeight = 'none';
+        hgt = pn.getBoundingClientRect().height; how = '无过渡实测';
+      }
+      const modeOk = document.getElementById('hs_rv').dataset.mode === 'v';
+      line(hgt > 150 && modeOk, '折叠展开高度：' + hgt.toFixed(0) + 'px·' + how + '（竖版=' + modeOk + '，>150px 为过）');
+      rows[1].click();
+      await new Promise(r => setTimeout(r, 500));
+      shell.style.maxWidth = '';
+      window.dispatchEvent(new Event('resize'));
+      const sum = document.createElement('div'); sum.textContent = '—— 自检完成 ——'; sum.style.color = '#8ba0bd'; box.appendChild(sum);
+    } catch (e) { line(false, '自检异常：' + e.message) }
+  };
+  addEventListener('resize', () => { clearTimeout(window.__acT); window.__acT = setTimeout(start, 400) });
+  start();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "xiaohaiguan-plugin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "sh 构建发行版.sh",
+    "build:check": "sh 构建发行版.sh --check",
+    "test": "node harness/模块构建回归.mjs"
+  },
+  "devDependencies": {
+    "acorn": "8.18.0",
+    "esbuild": "0.28.2",
+    "terser": "5.51.2"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  }
+}

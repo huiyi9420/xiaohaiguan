@@ -1,9 +1,14 @@
-'use strict';
+import { wait, esc, shq, toB64, b64d, p2, ct, pInt, latClr, okMac, isPrivacyMac, devIconOf, okCidr, okV6, HS_INFO_PAT, lineGName, linePoolName, PS_TXT, psTxt, lineDefOf, nowStr, stampStr } from './src/工具.js';
+import { hsUploadByApi, run } from './src/面板接口.js';
+import { extractSubBlocks, firstSelectGroup, subYaml, subRegionOf, buildSubExclude, buildSubInclude, previewSubFilter, normSubFilter, extractNodeNames } from './src/订阅解析.js';
+import { N6_COMMAND, hasUdpDownload, buildReadinessCommand, parseReadiness } from './src/状态采集.js';
+import { generateStartScript } from './src/启动脚本.js';
+import { riverMarkup, riverRender, riverClose } from './src/分流河流.js';
 /* ============================================================================
  * 小海关 · 可控 Clash(Mihomo 内核) 插件 for UFI-TOOLS-ZWRT 面板
  * 平台: UFI-TOOLS-ZWRT(1.0.0) · 依据《(1.0.0)插件开发文档》(docs/(1.0.0)插件开发文档.md)适配
- *   本文件为纯 JS 源码,node --check 可整文件直查(不再需要剥首尾行);发行版的 <script> 包裹
- *   由构建脚本组装,源码与构建产物均不得携带旧包裹标记与旧平台私有字符串(商店 hard-rule 拒审)
+ *   本文件为模块入口,通过构建脚本合并依赖并生成带 <script> 包裹的单文件发行版;
+ *   源码与构建产物均不得携带旧包裹标记与旧平台私有字符串(商店 hard-rule 拒审)
  * ----------------------------------------------------------------------------
  * 数据目录: /data/plugins/customs/(版本常量见 const V;界面卡片/弹窗标题均显示)
  *
@@ -43,62 +48,48 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.2.1';
+const V = '2.9.52'; /* v2.9.52: 诊断修复交互重做——ET共存误报根修(iptables回显是展开后网段,grep变量名恒0)+单项说明弹窗+忽略机制 */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
+/* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
-  '2.2.1': '接入设备·活动连接展示重做+单按钮运行态改圆点:①真机实证 88 条连接 87 条同目标(终端自带代理客户端的隧道),同目标聚合为一行×N条计数 ②机场信息节点(剩余流量/到期类节点名)识别为「ℹ️ 信息节点」 ③展开区加网关视角说明 ④设备区⟳手动刷新(手动/切页,不实时) ⑤单按钮模式运行态改 ET 组网同款圆点——绿●运行/灰●停止/橙●待升级/红●异常(替代三角箭头)',
-  '2.2.0': '按钮可点性统一(用户反馈"有些地方根本看不出来是个按钮"):①状态页「本机代理 ⏱ N分钟」从无边框小文字标签升级为亮框动作按钮(⚠常开时橙警示款) ②状态行「待升级/降级运行」徽标升级为带「查看」提示的可点按钮 ③节点页顶加引导句(点胶囊=切换节点,选中亮框✓) ④按钮内联样式收编为命名类(hs-act 动作档/hs-btn-xs 小号/hs-btn-right 右对齐等),今后调样式只改一处',
-  '2.1.11': '修复插件升级进度窗一闪而过(真机反馈:点升级后界面一闪就过去,升级全程后台隐形)——升级卡「立即升级」处理器先关弹窗再进升级编排,进度窗与升级卡同容器,同 tick 先关后开被面板关窗收尾压制(v2.1.4 在安装引导处修过同型 bug,此处漏修);现直接换内容进进度态,引擎未运行分支保留先关(无后续开窗不冲突)',
-  '2.1.10': '修复「自动兼容 EasyTier」开关完全失灵(真机反馈:打开后无法保存,也没有自我检查)——开关渲染在分流页,事件绑定却误放在设置页分支,设置页无此元素被空守卫静默跳过:onchange 永不挂上,开关只动 UI 不进草稿、etCheck 三级自检(未装ET/未开状态输出/状态异常)永不触发;绑定归位到分流页分支',
-  '2.1.9': '使用说明入口重设计(用户反馈:标题行孤立图标不自达意):撤下标题栏📖图标,改为两处文字入口——①状态页尾部引导条「❓ 第一次使用小海关? 📖 图文使用说明」(新手第一屏) ②设置页新增「帮助」区「使用说明·打开›」(正式入口);按钮全部复用面板原生样式',
-  '2.1.8': '新增「📖 使用说明」入口:管理面板标题行常驻(全部页签可见),点击打开在线新手引导页——5 步上手/日常三件事/小白词典,第一次用小海关照着走即可',
-  '2.1.7': '发布前审查加固(文档 §4.1/§8 对齐):弹窗宽度统一收到 92vw 上限,手机/平板断点去掉固定高度改 max-height 自适应(小窗不再撑满全屏);升级弹卡历史文案去除旧平台词汇字样(产物零残留,KANO_baseURL 系平台正式全局名保留)',
-  '2.1.6': '修复磁盘检测误报(真机 WebSSH 实证:诊断报"剩 0.0MB"实为 1.6G 可用)——超长设备名让 BusyBox df 折行,按固定列取值拿到的是使用率("9%"→9KB);改按挂载点匹配取倒数第三列,并丢弃 <1MB 的荒谬读数;v2.1.5 新增的启动/下载预检同口径修正(否则该形态设备会被误判"存储不足"而拒绝启动)',
-  '2.1.5': '修复升级死循环与磁盘满静默失败(真机日志实证):①无接管模式升级必失败回滚——启动不写防火墙脚本但复核强求三件烙印齐(F=0 S/Y 齐→自动回滚→对账再报→循环),现无接管升级也落盘新版脚本 ②磁盘治理:内核下载/引擎启动前预检剩余空间并自动清理下载残留等临时文件,不足则明确报错(满盘此前一切写入静默失败,是"用一段时间就不正常"的主因)',
-  '2.1.4': '修复在线下载安装全程隐形(真机复现:点在线下载后无进度窗,再点只提示安装中无下文):①引导→下载不再同弹窗先关后开(面板关窗收尾会压制紧随的显窗) ②安装中再点入口=切回进度窗而非只弹提示 ③安装中打开引导页不再覆盖进度窗内容(毁进度DOM=流程全盲) ④后台装完时进度窗按钮加判空(此前必 TypeError,吞掉成功提示与界面刷新)',
-  '2.1.3': '修复 v2.1.2 在线安装内核必崩:Gitee 常量定义在补丁错写仓库事故中遗漏(onlineInstall 读未定义变量 ReferenceError),补定义 shiyi0210/customs-kernel 三常量;镜像清单修剪兑现——GH_PROXY 仅留 gh-proxy.com(ghfast/ghproxy 实际仍在清单,与本版提交信息不符)',
-  '2.1.2': '内核下载链国内可用性重排(用户提供双源):①网盘直链 ufitools.ikuns.top 置顶 ②Gitee 镜像仓 gitee.com/shiyi0210/customs-kernel 直连(资产无 mihomo- 前缀防封,按 linux-架构-<tag>.gz 对接) ③GitHub 直连 ④本地代理 ⑤镜像仅留 gh-proxy.com;版本查询四级兜底:GitHub API→本地代理→Gitee API→jsDelivr',
-  '2.1.1': '手动下载指南精简(用户反馈:去掉画蛇添足)——只说三件事:在哪下载(github releases+镜像前缀)、找 linux-架构 的 .gz、传过来点上传;删除电脑/微信/AirDrop 等多余步骤说明与文件名变体讲解',
-  '2.1.0': '安装引导新增「📖 手动下载安装指南」——四步图文(电脑下载→传手机→面板上传→启动)带用户自助解决在线下载失败:含 GitHub 官方/镜像地址、arm64 文件名示例与选择规则(避开 v1/v2/v3 变体)、文件名不限说明、自定义国内源与加速前缀提示;一键复制文件名/直达上传',
-  '2.0.9': '纵深防御:内核安装进度文案的下载源名统一过 esc(innerHTML 通道三处齐平,补齐遗漏两处——当前源名全为常量不可利用,纯防未来演化)',
-  '2.0.8': '纵深防御:fw.sh 生成的 IPS 设备白名单补消费端过滤(与 WMACS/EXCIDRS 同款齐平)——上游采集/保存双段校验下合法值恒通过,零行为变化,防未来新增设备来源时成注入薄弱点',
-  '2.0.7': '旧平台残留清除:删除 1.x 旧版盲挂行检测(启动链静默校正+诊断体检项+一键重写三处)——旧盲挂行系 1.x 写入旧共用 boot 文件的形态,ZWRT 新路径下 1.x 从未运行,检测恒空转;启动与诊断各省一次 shell 往返,自启功能(手动开关/单路径写入)不变',
-  '2.0.6': '审计修正:配置写入加尺寸闸门——超 64KB(合并/直通模式 config.yaml 内嵌大订阅)不再 base64 拼 shell(文档禁大文件走该通道),改 upload_file 直传插件目录+mv 原子归位,快照/字节校验同款;小文本通道不变',
-  '2.0.5': '审计修正:弹窗显隐统一走面板 showModal/closeModal(文档 §4.1 指定 API,mShow/mHide 改为其薄包装并按 §3 检测存在性),内层弹窗补 .modal 面板类(mask 包 modal 文档形态;自有 .hs-modal 只承担布局约束,视觉零变化)',
-  '2.0.4': '审计修正:shell 通道恒定直连 /api/run_shell(文档 §2/§5.1 明令独立插件不得依赖页面根shell函数)——删除 v1.6.7「动态优先原生」旧平台分支与 shim 时代策略注释,401 提示改按文档 §8 口径(确认已登录管理页面);上传与 run_shell 两处 fetch 补显式 credentials:same-origin 与文档示例形态对齐',
-  '2.0.3': '操作日志与运行日志解耦(用户反馈:装完插件没开日志开关,安装内核全程无记录):操作日志改为默认常开(审计语义,256KB 轮转控制体量)——安装内核/订阅变更/规则增删始终在案;日志开关只控制引擎运行日志(stdout);关闭态日志页不再整页短路,操作日志页签照常可看(打开日志页智能默认落到操作日志)',
-  '2.0.2': '内核下载链国内可用性重做(用户反馈下载失败):①新增「自定义国内源」——安装页输入自有服务器/OSS 的完整 .gz 直链,在线下载最先尝试(真直连);②版本查询三级兜底(GitHub API→本地代理→jsDelivr data API 国内可达),修复旧 fallback 资产名不带版本号必 404 的问题;③下载源序列重排并明示:自定义源→GitHub直连→本地代理→镜像兜底;④在线全失败后回到安装页,红框引导「上传(最可靠)」与「自定义源」,上传按钮高亮;上传通道走 upload_file 直传(500MB 上限)本就支持内核',
-  '2.0.1': '复审修正:hsRunShell 兜底通道由 XHR 静态复制头改为 fetch(经页面签名包装)——ZWRT kano-sign 按请求计算签名,静态头直发 /run_shell 必 401;401 显式提示走原生通道;AbortController 超时;SHA256SUMS 校验链补录 v2.0.0',
-  '2.0.0': '平台适配大版本:UFI-TOOLS-ZWRT 1.0.0 面板(业务逻辑与 1.9.1 零改动,仅动平台接口层)——①纯 JS 源码去旧包裹标记;②shell 通道就绪 ZWRT 化(不再覆盖页面原生实现,挂载等 DOM 锚点就绪);③开机自启迁移 /data/plugins/ufi_tools_boot.sh(判存追加+chmod 700,删行改定界符形态);④上传改 /api/upload_file 直传(弃 base64 分块通道);⑤旧面板私有接口自查零使用。2.x 线仅限 ZWRT,商店先移除旧版再写入',
-  '1.9.1': '采集解析正则修([A-Z]+→[A-Z0-9]+):带数字字段名(CHN6/N4/N6)自 v1.8.4 起被静默跳过——ST.chn6 恒 0 致体检误报"完整表未装"+每次启动重复下载 v6 表;ST.neigh6 恒空致分设备线路 v6 自动跟随失效;设备 A/B/C 实测定位',
-  '1.9.0': '高危修复:v6 国内直通挂载被后段二次 -F HS_V6_LAN 整链清空(历史"链创建提前"修复与后段重建叠加的顺序回归)——ipset 3443 条灌入成功但挂载规则 0 条,国内 v6 全量 REDIRECT 进引擎(国内站慢真根因);去掉后段 -F 只保留兜底补建;fw_test 增加挂载顺序回归断言',
-  '1.8.9': '①china6 数据源加 testingcf/fastly 两个国内可达 jsdelivr 变体域;②v6 国内直通挂载重构(用户设备实证:ipset 3443 条但挂载规则 0 条)——废弃 -m set -h 用户态判据,改为真插规则+验证+失败降级内置三网大段(mangle 同款);③fw 应用日志 WARN/INFO 不再被 50 字符截断吞掉',
-  '1.8.8': 'ipv6 数据源下载优先直连:china6.txt 前置 jsdelivr CDN 直连源(国内可达,GitHub raw 空挂让"直连优先"名存实亡的问题根治),下载停滞阈值 10→6(空挂 9 秒快速换源,误杀由下一源重试+最终行数复测兜底);仅 ipv6 数据源,v4 表不动',
-  '1.8.7': '复审修正(高危):bootDisable 的 sed 删行转义在 v1.8.6 被改坏——BusyBox 实测关闭自启会把共用 boot 文件里所有含 plugins 的行(含其他插件自启行)替换成垃圾行;bootEnable 同款遗留形态一并修正(v1.8.6 起 bootSanitize 每次启动成功都会重写自启行,该缺陷会复发);docker busybox 三层转义链实测验证',
-  '1.8.6': '诊断增强八项：国内直通补v6(hs_cn6条数/内置兜底提示)；体检规则残留扩v6口径；自启行旧版盲挂检测+一键重写+启动静默校正；地理数据完整性；ipset灌入对账(带容差)；rule-providers加载核对(9090)；磁盘剩余空间<20MB告警；TUN降级态明示(fw.sh .tpmode标记)',
-  '1.8.5': '子代理全量bug审查修复批:①诊断rt-v6"修复"由 ip6tables FORWARD DROP(掐断全部终端v6且无清理路径)改为重建防火墙;②配置通道白名单收口(sanitizeConf:ports/tunName/secret/设备IP;ET state.json 内容过滤+v4/v6分桶,封堵拼进root脚本的注入面);③弹窗resolver兜底(缺节点弹窗/确认框/参数框的✕与蒙层关闭不再悬挂,修opBusy锁死);④engineStart端口未就绪硬门槛(修REDIRECT黑洞);⑤开机盲挂移除(sleep 2 快照)+start.sh单实例守卫;⑥DNS链排到LAN之前(救活TCP:53劫持);⑦残留检测扩v6+fwClean解析VERIFY;⑧合并模式rule-providers缩进按实际归一(修2空格订阅掉顶层键)+direct去重放宽缩进;⑨设备列表合并式采集(离网设备白名单不丢);⑩设置"虚拟网卡名"写对字段(此前写死字段永不生效);⑪preflightDl补最终尺寸复测(修快速下载被误删);⑫诊断数字下标保留(修filter(Boolean)漂移误判);⑬createFixedToast按文档签名;⑭debug限时定时器加级别校验;⑮chnUpload双计数判定+未命中清理;⑭订阅启用失败不再误报成功;⑮探测/设备采集in-flight守卫;⑯手动节点读名兼容转义引号;⑰合并模式节点页补四模式切换;⑱ipset灌入awk收紧+DEF数组浅拷贝',
-  '1.8.4': '国内 v6 快车道落地(审计 P0):fw 内置三网大段兜底(缺 chnroute6.txt 即生效)+启动自检自动补下载 china6.txt+手动下载不再因 v4 失败中断;fw_clean 规格无关清扫(根治清理未净 WARN);合并模式私网/免流段 DIRECT→REJECT 快速失败(治 TikTok 免流池超时);ipset 灌入行数校验',
-  '1.8.3': '升级体验修复:①升级成功/回滚后状态页横幅与底栏⬆️高亮即时消失(渲染快照未刷新,升级完成即重渲染面板/卡片);②操作栏按钮挤左下修复(style.display 空串清掉内联 flex)',
-  '1.8.2': '策略来源三态化(自建/合并/直通):新增合并模式——订阅节点/分类组接入本地四模式调度,规则本地优先+去重,分设备线路在合并模式生效;直通模式注入国内直通兜底(修微信收发慢:订阅规则对国内流量兜底不全,GEOIP 库误判腾讯段);旧 useSubConf 自动迁移',
-  '1.8.1': '真机反馈修订:订阅/设置/日志恢复顶部页签直达(六页签横滑,不再经「更多」二次下钻);「更多」页退役,卸载入口迁入设置页危险区(三连击不变);设备仍并入分流页',
-  '1.8.0': 'UI 整体重构:七页签并四页签(状态/分流/节点/更多);设备页并入分流页;订阅/设置/日志下沉「更多」二级页(返回行交互);卡片按钮重排=停止|分流|节点|日志(条件),状态行可点开面板;操作栏仅状态页显示,卸载移入「更多」三连击;节点页新增订阅管理直达入口',
-  '1.7.2': '修复直通回退断链(v1.7.1 守卫位置错误:providers 在订阅判定前被跳过,回退自建时组引用 sub0 不存在致校验 fatal)',
-  '1.7.1': '订阅直通三处修复:孤儿provider不再拼入/节点页测试按钮不丢/缓存刷新补await',
-  '1.7.0': '新增「使用订阅自带策略」:订阅分组与分流整体生效(默认关),小海关退基础设施层;订阅无规则自动回退',
-  '1.6.15': '修复上传必 401:上传改走 run 通道分块落盘(upload_file 接口面板鉴权头 XHR 带不上)',
-  '1.6.14': '节点直选:从任意子组点击节点即切换出口(自动切🚀主组+手动模式),测试者快速换节点',
-  '1.6.13': '升级失败自动回滚(无需手动)+成功后手动清理备份按钮',
-  '1.6.12': '日志安全: 读取超256KB只取尾部100KB+醒目提示(51MB致面板崩溃实测);debug级别10分钟自动限时;修复v1.6.11转义bug',
-    '1.6.11': '日志安全三招: 读取截尾/debug限时/零后台轮询',
-    '1.6.10': '启动失败自动急救: 无条件清规则+杀残留引擎(三层保活防线齐备:退出钩子+探活守卫+启动急救)',
-    '1.6.9': 'GOMEMLIMIT后缀M→MiB(Go运行时格式要求,fatal error实测修复)',
-    '1.6.8': '退出钩子绝对路径修复(/mihomo not found)+探活失败不apply守卫(防黑洞断网)',
-    '1.6.7': 'run动态优先原生(401根治,XHR无法设置鉴权头被浏览器拦截,v1.3.2方案废止)',
-    '1.6.6': 'XHR固定绑定hsRunShell(修复旧平台页面覆盖根shell函数致AbortError)',
-    '1.6.5': 'Phase1批次一二: fw幂等(flock+链F保底)/退出钩子/GOMEMLIMIT默认128M/v4白名单MAC降级/TPROXY降级WARN/出海例外表11域名/china_ip规则集替换GeoIP/INPUT放行mark包'
-};
+  '2.9.52': '诊断修复交互重做+ET共存误报根修:①「ET组网共存·排除规则未挂载」系恒误报——旧判据 grep 防火墙脚本 shell 变量名(ETNETS等),iptables 回显的是展开后真实网段,字面量永远 0(WebSSH 实证:HS_LAN 7条/HS_UDP 3条排除在位);改判 state.json 真实网段与打洞端口 ②报告里点修复项弹说明窗——讲清现象/影响/动作与取舍,不引导必须修 ③「忽略此项」:忽略后不计警示,报告列表随时取消忽略 ④一键修复不再收忽略项',
+  '2.9.51': '点数字展开回调丝滑档(注水.5s/行渐.34s/延迟阶梯.12-.32s,总感知<0.7s)——1.5s 慢档保留给折叠面板/水流填充/添加区',
+  '2.9.50': '动画拉到 1.5s 档(注水1.5s/行渐1.05s/折叠1.35s/填充1.1s)+修添加区遮挡复发(repanel 改确定性高度计算,不采过渡中间值)',
+  '2.9.49': '全局动画再放缓(注水.95s/行渐.68s/折叠.82s/填充.65s,位移加大)+编辑态重渲染渐入动画(生硬切换→柔和过渡)',
+  '2.9.48': '编辑态隐藏「＋添加」按钮(输入框已常驻展示,防误触收起连带折叠编辑按钮),完成按钮编辑态通栏',
+  '2.9.47': '无变更更新守卫(回填未改点更新→如实提示未修改)',
+  '2.9.46': '修上游填充卡闸门(SVG路径拼接截断,五节点全准)',
+  '2.9.45': '上游点亮二分精确弧长+修第一条回填+匹配方式纯文本',
+  '2.9.44': '修上游点亮③④+收起吞按钮+编辑态笔回填式重做',
+  '2.9.43': '兜底出口全链显示(节点/查询=组→组→节点+延迟)',
+  '2.9.42': '清单浏览/编辑双模式(徽标只读+✎编辑)',
+  '2.9.41': '修竖版折叠面板内添加区撑大被截(同步扩容父面板)+按钮改「添加」+删卡内保存按钮(顶部保存/放弃是真出口,增删同步脏标启停)',
+  '2.9.40': '节点自适应均布(任何组合都均衡)+排除直连更名强制直连',
+  '2.9.39': '动效打磨: 展开/折叠/渐入全面放缓有节奏;添加区动态高度修移动端按钮截挡+放缓;水流提速并加急缓两段节奏(真水流感);PC光珠变速行进',
+  '2.9.38': '修结论行括注矛盾——去泳道括注/①节点标签改中性「国内直连」/geosite文案重写(域名命中geosite:cn·解析x确认),防火墙与引擎通道各自表述',
+  '2.9.37': '可靠性加固:引擎未运行守卫(关态全直连,防假走代理)+fake-ip通用模式例外(time/stun/lan不断言直连)+订阅高级规则守卫(正则/逻辑不演算则明说)——直连断言仅在双确认时给出',
+  '2.9.36': '判向着色(绿/橙/红胶囊醒目)+竖版水流填充(选行从源头填充到圆点)+双端水流粗细层次(辉光宽底层)+主流改蜿蜒曲线(河流哪有笔直的)',
+  '2.9.35': '判据族显式跟随 v6Dns 开关(v6 关→仅 v4 采信,v6 开→v6 优先/无 AAAA 回落 v4);引擎开关本身控制 AAAA 响应,单次查询即自适应',
+  '2.9.34': '排除/强制卡清单唯一化(静态明细置空,只在活控件区显示带删除的清单,修双份冗余)+竖版容器去padding',
+  '2.9.33': '查一查双栈判定: nslookup 收全 A/AAAA 地址,按 v6Dns 开关决定判据族(v6 开=AAAA 优先判 v6)——修 v6 开启时误判 v4 的缺陷;v6 真实地址查 china_ip v6 段确认',
+  '2.9.32': '排除/强制卡去冗余(处理位置行并入清单)+添加改展开式(虚线按钮点开展开输入区,收放动画,回车加入)',
+  '2.9.31': '查一查域名确定性判定(fake-ip oracle): nslookup 引擎DNS——真实IP=命中国内域名库→直连(国内IP双确认),198.18.x=未命中→MATCH兜底链→走代理;弃模拟两可答案(真机验证 baidu/google 双通过)',
+  '2.9.30': '详情卡活控件化:国内直通卡内真实开关/下载/上传,排除与强制卡内增删即时预览+保存生效,ET路由表卡内展开;其余流量弃设置页跳转(改去节点页切出口)',
+  '2.9.29': '查一查深判:IP查china_ip规则集(v4 ipset/v6 前缀CIDR)精确判直连,域名演算显式规则+兜底链路给出最终判向',
+  '2.9.28': '其余流量文案纠正(规则判直连或代理,非全部代理)+详情卡实测规则判向统计与兜底出口链路',
+  '2.9.27': '修上游点亮越节点bug(止于当前节点)+竖版轨道加水流粒子光珠(对齐PC)',
+  '2.9.26': '河流图字号全面对齐面板基准(标题16→13/正文12.5→11.5/图标框42→34,ET路由表同级)',
+  '2.9.25': '横版画布等比缩一号(640)+去横padding+节点名恢复四字(真机反馈拥挤偏大)',
+  '2.9.24': '修ET节点显隐回归(撞上缓存读取中途消失)+清单变动强制留痕(升级丢清单可追溯)',
+  '2.9.23': '分流图重做:双泳道(防火墙放行/小海关引擎)+查一查检索(实测连接优先)+窄屏行内折叠',
+  '2.9.3': '小屏适配(弹窗加宽+边距收窄+清单行纵向堆叠)',
+  '2.9.2': '修复设备区刷新按钮绑定错位(永不生效的根因)',
+  '2.9.1': '修分流页设备区双刷新钮冲突;四场景诊断体系(静态体检/运行增强/卸载备份引导/新手5步引导)',
+  '2.9.0': '四场景诊断+新手引导向导(首次安装自动弹出)',
+  '2.8.11': '诊断升级检查脱离运行态门槛+修复动作直达升级卡;设备类型图标(电脑💻/手机📱)'
+}; /* 超5版删最底(2.8.10) */
 /* 语义化版本比较: a<b 负 / 相等 0 / a>b 正 */
 function verCmp(a, b) {
   const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
@@ -118,11 +109,13 @@ const BOOT_KEY = 'plugins/customs';
 /* v1.8.5: 移除 `sleep 2 && fw.sh apply` 盲挂——2 秒时面板/引擎未必就绪(start.sh 哨兵段最坏先等 16-24s),
    规则先挂=全终端 TCP 断到引擎起来;接管统一交给 start.sh 的"就绪后挂载"分支(自带 flock)(2026-09-13 审查 P1) */
 const bootLine = () => '[ -f ' + START + ' ] && sh ' + START + ' # plugins/customs';
-let HS_MANUAL = []; let HS_MANUAL_LOADED = false; let HS_SUBINFO = undefined; let HS_LAST_RF = '';
+let HS_MANUAL = []; let HS_MANUAL_LOADED = false; let HS_SUBINFO_ALL = undefined; let HS_LAST_RF = ''; /* SUBINFO_ALL={i:{left,expire}} 全订阅流量/到期(订阅卡徽章,v2.7.0: 每订阅独立,不再只激活) */
 let HS_DEBUG_TIMER = null;
 let HS_SUB_RAW = ''; /* 活动订阅原文缓存(genConfigYaml 同步函数读不了文件;loadConf/downloadSub/切订阅三处刷新) */
 let HS_SUB_RAW_KEY = ''; /* 缓存对应的订阅下标,防串 */
+let HS_SUB_RAW_ALL = null; /* v2.7.0 融合: 全部订阅原文缓存 {下标:txt};融合开关/订阅增删/更新时失效重建 */
 let HS_SUB_EDIT = -1; /* 订阅表单编辑态:-1=添加模式,>=0=正在编辑 C.subs[i](改名/换链接);删除订阅时须同步修正此下标 */
+let HS_SUB_NEW = false; /* v2.7.8 新建卡片态: 点「＋添加订阅」在列表顶部插入编辑卡(替代底部常驻表单) */
 const PORT_DEF = { mixed: 7890, redir: 7892, tproxy: 7893, dns: 1053, ctrl: 9090 };
 
 /* ================= 工具 ================= */
@@ -131,7 +124,6 @@ const $  = s => document.querySelector(s);
    首装场景启动链路被拖长时 fetch 封装超时中止,XHR 不受影响) */
 /* v2.0.1: hsXhr 已随 XHR 兜底通道移除而删除(死代码清理,唯一调用方 hsRunShell 已改 fetch) */
 const $$ = s => Array.from(document.querySelectorAll(s));
-const wait = ms => new Promise(r => setTimeout(r, ms));
 /* ZWRT 就绪等待(文档 §2 模板 waitFor): 有界轮询 DOM 锚点,超时返回 null 由调用侧自行兜底 */
 const waitFor = async (selector, timeout = 10000) => {
   const until = Date.now() + timeout;
@@ -142,88 +134,7 @@ const waitFor = async (selector, timeout = 10000) => {
 let HS_LAST_ERR = ''; /* 最近一次启动/校验失败原因(升级失败窗展示) */
 let HS_UPGRADING = false; /* 升级进行中:三形态入口冻结,防并发操作 */
 let HS_UPG_OK = false; /* 升级成败判定:engineStart 复核通过才置真(engineRestart 返回值会被 stop 的边缘失败污染) */
-const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const shq = t => "'" + String(t).replace(/'/g, "'\\''") + "'";
-const toB64 = t => { try { return btoa(unescape(encodeURIComponent(t))) } catch (e) { return '' } };
-const b64d = t => { try { return decodeURIComponent(escape(atob(t))) } catch (e) { return '' } };
-const p2 = n => String(n).padStart(2, '0');
-const ct = r => (r && r.content || '').trim();
-const pInt = r => parseInt(ct(r)) || 0;
-const latClr = d => d < 150 ? '#66bb6a' : d < 400 ? '#ffb74d' : '#e57373';
-/* MAC/CIDR 白名单正则: 这两个值会拼进 root 执行的 fw.sh,导入配置或手改 config.json 可能带非法值,消费端一律先过滤(防 shell 注入) */
-const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
-const okMac = t => MAC_RE.test(String(t || '').trim());
-const okCidr = t => /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(String(t || '').trim());
-const okV6 = t => /^[0-9a-f:]+$/i.test(String(t || '').trim()) && String(t).includes(':');
-/* 订阅信息节点过滤(机场在节点列表里塞的公告行,非真实节点): 关键词命中即滤——新增类型持续补充 */
-const HS_INFO_PAT = /剩余|到期|流量|重置|官网|套餐|过期|有效|距离|订阅|获取|时间|更新|expire|traffic|reset/i;
-/* 分设备线路: 线路组名前缀(YAML 组名)与规则中引用须一致;池内策略类型映射 */
-const lineGName = n => '🛤️ ' + n;
-const linePoolName = nm => lineGName(nm) + '·池';
-/* 线路锁定模式的运行时默认出口(生成侧与保存后 PUT 组切换共用,须保持一致):
-   1个节点=直接锁定; 多个+手动指定=锁定首选; 多个+池内策略=指向候选池子组 */
-const PS_TXT = { self: '自建', merge: '合并', direct: '直通' };
-function psTxt(v) { return PS_TXT[v] || '自建' }
-function lineDefOf(L) {
-  if (!L || L.mode !== 'node') return '';
-  const nodes = (Array.isArray(L.nodes) ? L.nodes : (L.node ? [L.node] : [])).filter(n => typeof n === 'string' && n && n.length <= 64);
-  if (!nodes.length) return '';
-  if (nodes.length === 1) return nodes[0];
-  if (L.pick === 'manual') return (nodes.indexOf(L.node) >= 0 ? L.node : nodes[0]);
-  return linePoolName(String(L.name));
-}
 
-const nowStr = () => { const d = new Date(); return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()) };
-const stampStr = () => nowStr().replace(/[-: ]/g, '');
-
-/* Shell 直连通道(文档 §2/§5.1): 独立插件固定直接 POST /api/run_shell,
-   不依赖或修改页面的 runShellWithRoot——run 恒定绑定本实现,无任何全局名回退分支
-   (v1.3.2/v1.6.7 的「固定绑定/动态优先原生」均为旧平台认知,ZWRT 分支统一废止) */
-/* 文件上传(ZWRT 文档 §5.2): POST /api/upload_file,multipart 直传——fetch 请求会再经过页面签名处理,
-   面板鉴权头可携带(根治 v1.6.15 XHR 带不上鉴权头的 401);文档明令勿为大文件 Base64 拼接 Shell 命令。
-   base 必须先求值再拼接(F1 优先级陷阱: + 优先于 ||,若把回退默认值与后缀拼接写进同一表达式,
-   ZWRT 恒定义 KANO_baseURL 时 URL 恒等于 base 本身、丢 /upload_file 后缀)——与 hsRunShell 同款形态 */
-async function hsUploadByApi(file, targetDir) {
-  const base = (typeof KANO_baseURL !== 'undefined' && KANO_baseURL) ? KANO_baseURL : '/api';
-  const form = new FormData();
-  form.append('file', file);
-  form.append('path', targetDir);
-  const headers = { ...(typeof common_headers !== 'undefined' && common_headers ? common_headers : {}) };
-  /* multipart boundary 由浏览器生成:复制面板头后双大小写删 Content-Type(ET platform-zwrt v2.0.1 实证,
-     文档 §5.2 官方示例即双删,防面板头键大小写差异破坏 boundary) */
-  delete headers['Content-Type'];
-  delete headers['content-type'];
-  const response = await fetch(base + '/upload_file', { method: 'POST', headers, credentials: 'same-origin', body: form });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok || body.result !== 'success') throw new Error(body.error || '上传失败');
-  return body; /* 含落盘绝对路径 path/name/size——文件名取 basename 由服务端定,后续一律以 body.path 为准 */
-}
-const hsRunShell = async (cmd, timeoutMs = 30000) => {
-  /* v2.0.1: 改走 fetch——ZWRT 鉴权为 kano-sign 按请求(method+path+kano-t)计算,
-     静态复制 common_headers 的 XHR 直发 /run_shell 必然签名失配 401(旧平台认知残留);
-     fetch 经页面签名包装(文档 §5.2 同款);失败显式报错,不再静默退化 */
-  const base = (typeof KANO_baseURL !== 'undefined' && KANO_baseURL) ? KANO_baseURL : '/api';
-  const headers = Object.assign({}, (typeof common_headers !== 'undefined' && common_headers) || {});
-  headers['Content-Type'] = 'application/json';
-  let res = null;
-  try {
-    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const tm = ctrl ? setTimeout(() => { try { ctrl.abort() } catch (e) { } }, Number(timeoutMs) || 30000) : null;
-    const fr = await fetch(base + '/run_shell', { method: 'POST', headers: headers, credentials: 'same-origin', body: JSON.stringify({ cmd: String(cmd), timeout: Number(timeoutMs) || 30000 }), signal: ctrl ? ctrl.signal : undefined });
-    if (tm) clearTimeout(tm);
-    const txt = await fr.text();
-    res = { ok: fr.ok, status: fr.status, text: txt };
-  } catch (e) {
-    return { success: false, content: 'Shell 请求失败:' + String((e && e.message) || e) };
-  }
-  if (!res.ok) return { success: false, content: 'HTTP ' + res.status + (res.status === 401 ? '(鉴权失败——请确认插件运行于已登录的管理页面后重试)' : '') };
-  try { const d = JSON.parse(res.text); return { success: !!d.success, content: d.content || '' } }
-  catch (e) { return { success: false, content: '响应异常:' + res.text.slice(0, 60) } }
-};
-/* Shell 分发器(文档 §2/§5.1 明令: 独立插件必须直接请求 /api/run_shell,不得依赖或覆盖页面的
-   runShellWithRoot):恒定直连 hsRunShell,无页面全局函数分支(v1.6.7「动态优先原生」系旧平台
-   referer/host/origin 鉴权头认知,ZWRT 下废止);长操作超时风险由调用侧分步控制(每步 run 独立短超时) */
-const run = (cmd, t) => hsRunShell(cmd, t);
 
 function toast(msg, color) {
   if (typeof createToast === 'function') { createToast(msg, color || 'green', 2600); return }
@@ -289,11 +200,13 @@ const DEF = {
   logEnabled: false, logLevel: 'info',
   ports: Object.assign({}, PORT_DEF), tunName: 'hs0',
   iv: 300, lowMem: false, autostart: false, bootMode: 'keep',
-  coexistAuto: false, exclude: [], force: [], cnBypass: true, cardMode: 'full', upgBackup: null, ctrlLan: false, policySrc: 'self',
+  coexistAuto: false, exclude: [], force: [], cnBypass: true, cardMode: 'full', upgBackup: null, ctrlLan: false, policySrc: 'self', v6Dns: false, diagIgnore: [], /* v2.2.2: 诊断忽略清单(键=fix.id 或 分组|条目名;忽略项不计警示不打扰,报告里可随时取消)  v2.8.0-beta: IPv6 直连实验(恢复 AAAA),默认关 */
   devices: [],            // {ip,mac,name,proxy,line}  line=线路id,空=跟随全局
   lines: [],              // {id,name,mode:auto|balance|fallback|node,node} 分设备线路
-  subs: [],               // {name,url,time}
+  subs: [],               // {name,url,time,filter}  filter=节点过滤规则(v2.7.0,见 normSubFilter)
   activeSub: -1,
+  subFusion: false,       // 多订阅节点融合(仅合并模式;开启后全部订阅节点合并进池,引擎 override 前缀防撞名)
+  removedMacs: [],        // 已忽略设备 [{mac,name,time}](v2.7.0 黑名单防 ARP/DHCP 残留复活;v2.7.9 存名字可辨认;上限 50)
   ver: '', secret: '', kernelMirror: '' /* 自定义内核直连源(完整 .gz URL,用户自有国内主机/OSS;空=不用) */
 };
 let C = Object.assign({}, DEF);
@@ -301,56 +214,28 @@ C.ports = Object.assign({}, DEF.ports);
 /* 订阅原文缓存刷新(genConfigYaml 同步,读文件必须在异步侧完成): useSubConf 开启/订阅更新/切换订阅三时机调用 */
 async function refreshSubRaw() {
   const key = String(C.activeSub);
-  if (key === HS_SUB_RAW_KEY && HS_SUB_RAW) return;
-  HS_SUB_RAW = ''; HS_SUB_RAW_KEY = key;
-  if (C.activeSub < 0 || !C.subs[C.activeSub]) return;
-  HS_SUB_RAW = await readFile(DIR + '/providers/sub' + C.activeSub + '.yaml');
-}
-/* 订阅 YAML 块提取(行级): 抓 proxies/proxy-groups/rules/rule-providers 四个 top-level 块原文,
-   连 top-level 锚点定义(行首 xxx: &a 形式与游离 &a 行)一并携带防悬空引用;无 rules 视为不完整订阅 */
-function extractSubBlocks(txt) {
-  const want = ['proxies', 'proxy-groups', 'rules', 'rule-providers'];
-  const out = {}, anchors = [];
-  let cur = null;
-  (txt || '').split('\n').forEach(l => {
-    const top = /^[A-Za-z_-]+:/.test(l) ? l.split(':')[0] : null;
-    if (top) { cur = want.indexOf(top) >= 0 ? top : null; if (cur && !out[cur]) out[cur] = []; if (cur === 'proxies' && /&[A-Za-z0-9_-]+/.test(l) && !/^proxies:/.test(l)) anchors.push(l); return }
-    /* 游离锚点定义行(顶层两空格内的 &name: 结构归 anchors 兜底) */
-    if (!cur && /^[ \t]{0,4}[A-Za-z0-9_-]+:.*&[A-Za-z0-9_-]+/.test(l)) { anchors.push(l); return }
-    if (cur && l.match(/^[ \t]+\S|^\s*#/)) out[cur].push(l);
-    else if (l.trim() === '') { if (cur) out[cur].push(l) }
-    else cur = null;
-  });
-  const parts = [];
-  if (anchors.length) parts.push('# 订阅锚点定义(供块内引用)\n' + anchors.join('\n'));
-  want.forEach(k => { if (out[k] && out[k].some(l => l.trim())) parts.push(k + ':\n' + out[k].join('\n').replace(/\n+$/, '')) });
-  /* 完整性: 节点与规则缺一不可(无规则的订阅当节点仓库用更合适) */
-  return (out.proxies && out.proxies.some(l => l.trim()) && out.rules && out.rules.some(l => l.trim())) ? { ok: true, yaml: parts.join('\n\n'), blocks: out, anchors: anchors } : { ok: false, why: '订阅缺少节点或规则段' };
-}
-/* 订阅策略直通下,首个 select 组名(供强制/出海例外表注入 target;订阅组结构千差万别,取不到则放弃注入) */
-function firstSelectGroup(txt) {
-  let inGroups = false, name = '', isSel = false;
-  const lines = (txt || '').split('\n');
-  for (const l of lines) {
-    if (/^proxy-groups:/.test(l)) { inGroups = true; continue }
-    if (inGroups && /^[A-Za-z_-]+:/.test(l)) break;
-    if (!inGroups) continue;
-    const nm = l.match(/^  {0,2}(- )?(?:name: |"name: "?)'?([^,'"]+)/);
-    if (nm && !nm[0].includes('name:')) { }
-    const m2 = l.match(/^\s*-?\s*(?:\{\s*)?name:\s*'?([^,'"}]+)/) || l.match(/^\s*-\s*'?([^:'"{}]+)'?\s*$/);
-    if (m2 && !l.trim().startsWith('type:') && l.trim() !== '-') {
-      name = m2[1].trim(); isSel = null;
-      /* flow 单行组(- { name: X, type: select, ... })是机场常见风格: 旧版只认缩进型 type 行,flow 型失明致取不到首个 select 组(强制清单/出海例外注入被跳过) */
-      if (l.includes('{')) {
-        const tf = l.match(/[{,]\s*type:\s*'?"?([a-z-]+)/);
-        if (tf) { if (tf[1] === 'select') return name; name = '' }
-        continue;
-      }
-    }
-    const t = l.match(/^\s*type:\s*'?([a-z-]+)/);
-    if (t) { if (t[1] === 'select') return name; }
+  if (key !== HS_SUB_RAW_KEY || !HS_SUB_RAW) {
+    HS_SUB_RAW = ''; HS_SUB_RAW_KEY = key;
+    if (C.activeSub >= 0 && C.subs[C.activeSub]) HS_SUB_RAW = await readFile(DIR + '/providers/sub' + C.activeSub + '.yaml');
   }
-  return '';
+  /* v2.7.0 融合: 开启且合并模式时预载全部订阅原文(只读一次缓存于内存,genConfigYaml 同步消费);
+     签名含每订阅 url+更新时间+过滤规则——任一变化(更新/过滤保存/换链接)即重建,防 stale
+     (审查问题3: 旧签名只看存在性,非激活订阅更新后融合池仍用旧内容) */
+  if (C.subFusion && C.policySrc === 'merge') {
+    const sig = C.subs.map(s => s ? [s.url, s.time || '', JSON.stringify(s.filter || null)].join('|') : '').join(';');
+    if (HS_SUB_RAW_ALL && HS_SUB_RAW_ALL._sig === sig) return;
+    const all = { _sig: sig };
+    for (let j = 0; j < C.subs.length; j++) {
+      if (!C.subs[j] || !C.subs[j].url || j === C.activeSub) continue;
+      all[j] = await readFile(DIR + '/providers/sub' + j + '.yaml');
+    }
+    HS_SUB_RAW_ALL = all;
+  } else HS_SUB_RAW_ALL = null;
+}
+/* v2.7.0 融合生效判定: 该订阅是否参与当前运行配置(激活 或 融合开启的合并模式全部订阅)——
+   更新/过滤保存后的热重载决策用(审查问题3: 融合下非激活订阅也是生效节点池,不能当"未生效"跳过) */
+function subEffective(i) {
+  return i === C.activeSub || (C.subFusion && C.policySrc === 'merge' && i >= 0 && !!C.subs[i]);
 }
 /* 当前实际主组名: 自建=🚀 节点选择;直通=订阅首个 select 组(取不到回退 GLOBAL 内置组)。
    UDP 探测/线路节点池等处曾写死自建组名,直通模式下组不存在→404/空列表(2026-09-12 用户实锤:UDP 测全失败+线路选不了节点) */
@@ -374,15 +259,31 @@ async function loadConf() {
   sanitizeConf(); /* v1.8.5: 手改/损坏的 config.json 同口径过滤 */
   if (C.policySrc !== 'self') await refreshSubRaw(); /* 订阅直通/合并模式的配置合成依赖订阅原文 */
 }
-async function saveConf() { const ok = await writeFile(CJ, JSON.stringify(C, null, 2)); if (!ok) toast('配置保存失败(磁盘?)', 'red'); return ok }
+async function saveConf() {
+  /* v2.9.24: 清单规模变动强制留痕——强/排除清单条数变化写操作日志(真机实锢: 升级后 force 清单丢失且无迹可查,.bak 回退只防 JSON 损坏防不了"合法但被清空"的写入) */
+  try {
+    const prev = await readFile(CJ);
+    if (prev) {
+      const pj = JSON.parse(prev);
+      const pf = (pj.force || []).length, pe = (pj.exclude || []).length;
+      const cf = (C.force || []).length, ce = (C.exclude || []).length;
+      if (pf !== cf || pe !== ce) opLog('清单变动留痕: 强制 ' + pf + '→' + cf + ' 条, 排除 ' + pe + '→' + ce + ' 条');
+    }
+  } catch (e) { }
+  const ok = await writeFile(CJ, JSON.stringify(C, null, 2)); if (!ok) toast('配置保存失败(磁盘?)', 'red'); return ok;
+}
 
 /* ================= 运行态缓存(仅事件触发时刷新) ================= */
-let ST = { bin: false, pid: '', boot: false, listen: {}, tun: false, kb: 0, rlog: 0, olog: 0, chn: 0, chn6: 0, arp4: {}, neigh6: {} };
+let ST = { bin: false, pid: '', boot: false, listen: {}, tun: false, kb: 0, rlog: 0, olog: 0, chn: 0, chn6: 0, arp4: {}, neigh6: {}, rss: 0, conn: 0 };
+let HS_COLLECT_BUSY = false; /* 审查P2-6: 并发守卫——外部连点刷新与探活循环并发时防 ST 乱序覆盖 */
 async function collectStatus() {
+  if (HS_COLLECT_BUSY) return ST; /* 在途采集进行中: 直接回当前状态(旧值自洽,下次动作再刷新) */
+  HS_COLLECT_BUSY = true;
+  try {
   const P = C.ports;
   const cmd = 'D=' + shq(DIR) + ';'
     + 'echo =BIN=$([ -x $D/mihomo ] && echo 1);'
-    + 'echo =PID=$(pidof mihomo);'
+    + 'PIDS=""; for Q in $(pidof mihomo 2>/dev/null); do [ "$(readlink /proc/$Q/exe 2>/dev/null)" = ' + shq(BIN) + ' ] && PIDS="$PIDS $Q"; done; echo =PID=$PIDS;' /* F15: 所有权核验,同名他装不计入 */
     + 'echo =BOOT=$(grep -cF ' + shq(BOOT_KEY) + ' ' + shq(BOOT_SH) + ' 2>/dev/null);'
     + 'echo =LM=1;'
     + 'echo =LR=1;'
@@ -390,17 +291,19 @@ async function collectStatus() {
     + 'echo =LC=1;'
     + 'echo =TUN=$(ip link show ' + shq(C.tunName) + ' 2>/dev/null | wc -l);'
     + 'echo =KB=$(du -sk $D 2>/dev/null | awk \'{print $1}\');'
+    + 'echo =RSS=$(R=$(echo $PIDS | awk \'{print $1}\'); [ -n "$R" ] && grep VmRSS /proc/$R/status 2>/dev/null | awk \'{print $2}\' || echo 0);' /* v2.5.0: 引擎内存 kB——用已核验 PIDS,不裸 pidof */
+    + 'echo =CONN=$(netstat -tn 2>/dev/null | grep -c ESTABLISHED);' /* v2.5.0: 连接数近似(netstat ESTABLISHED 总行数,最简无开销) */
     + 'echo =RL=$(wc -c < $D/customs.log 2>/dev/null || echo 0);'
     + 'echo =GI=$([ -f $D/geoip.metadb ] && stat -c%Y $D/geoip.metadb 2>/dev/null || echo 0);'
     + 'echo =GS=$([ -f $D/geosite.dat ] && stat -c%Y $D/geosite.dat 2>/dev/null || echo 0);'
     + 'echo =CHN=$(wc -l < $D/chnroute.txt 2>/dev/null || echo 0);'
     + 'echo =CHN6=$(wc -l < $D/chnroute6.txt 2>/dev/null || echo 0);'
     + 'echo =N4=$(cat /proc/net/arp 2>/dev/null | tail -n +2 | awk \'$4!="00:00:00:00:00:00"{printf "%s~%s ", $1, $4}\');'
-    + 'echo =N6=$(ip -6 neigh show 2>/dev/null | grep lladdr | awk "{printf \"%s~%s \", \$1, \$5}");'
+    + N6_COMMAND
     + 'echo =OL=$(wc -c < $D/plugin.log 2>/dev/null || echo 0);'
     + 'echo =S2X=$([ -f $D/.s2expired ] && echo 1);'
   const r = await run(cmd, 12000);
-  const o = { bin: false, pid: '', boot: false, listen: {}, tun: false, kb: 0, rlog: 0, olog: 0, chn: 0, arp4: {}, neigh6: {} };
+  const o = { bin: false, pid: '', boot: false, listen: {}, tun: false, kb: 0, rlog: 0, olog: 0, chn: 0, arp4: {}, neigh6: {}, rss: 0, conn: 0 };
   (r.content || '').split('\n').forEach(l => {
     /* v1.9.1 修: [A-Z]+ 不含数字——=CHN6=/(N4/N6 等带数字字段名)的行永远匹配不上被静默跳过,
        ST.chn6 恒 0(体检误报"完整表未装"+每次启动重复下载)+ST.neigh6 恒空(分设备线路 v6 自动跟随失效) (2026-10-01 设备 A/B/C 实测定位) */
@@ -416,6 +319,8 @@ async function collectStatus() {
     else if (m[1] === 'GI') o.geoIpT = parseInt(v) || 0;
     else if (m[1] === 'GS') o.geoSiteT = parseInt(v) || 0;
     else if (m[1] === 'CHN') o.chn = parseInt(v) || 0;
+    else if (m[1] === 'RSS') o.rss = parseInt(v) || 0; /* v2.5.0: 引擎内存 kB */
+    else if (m[1] === 'CONN') o.conn = parseInt(v) || 0; /* v2.5.0: 连接数近似 */
     else if (m[1] === 'CHN6') o.chn6 = parseInt(v) || 0;
     else if (m[1] === 'N4' || m[1] === 'N6') {
       const nm = m[1] === 'N4' ? (o.arp4 = {}) : (o.neigh6 = {});
@@ -427,11 +332,10 @@ async function collectStatus() {
   o.running = !!o.pid;
   if (!o.running) { o.listen = {} } /* 进程没跑,端口全 false */
   else {
-    /* 进程在跑: 控制接口实测(成功=全端口就绪,失败=可能未完全启动) */
-    const apiTest = await run('curl -s -m 3 -o /dev/null http://127.0.0.1:' + P.ctrl + '/version 2>/dev/null && echo 1 || echo 0', 5000);
-    const apiOk = (apiTest.content || '').trim() === '1';
-    if (apiOk) { o.listen.mixed = o.listen.redir = o.listen.tproxy = o.listen.dns = o.listen.ctrl = true }
-    else { o.listen = {} }
+    ST.listen = {};
+    const readiness = await run(buildReadinessCommand(P, C.secret, o.pid), 5000);
+    if (!readiness.success) throw new Error('引擎监听状态采集失败');
+    o.listen = parseReadiness(readiness.content, P);
   }
   /* 升级对账状态跨刷新保留: ST 是整体替换,不带上会让 upgradePending/upgradeFrom 在每次 collectStatus 后丢失 */
   o.upgradePending = ST.upgradePending;
@@ -461,11 +365,17 @@ async function collectStatus() {
   }
   /* 分设备线路地址自动跟随: 地址集变化→静默热重载(签名防抖;失败下次刷新重试) */
   syncLineRules().catch(() => { });
+  /* 审查 P1-1: ET 组网变化跟随(fw 排除面同步;仅 coexistAuto+接管中) */
+  syncEtRules().catch(() => { });
+  /* 审查P2-9: start.sh 探活失败标记——引擎启动慢首次未挂规则,提示用户手动重应用 */
+  run('[ -f ' + DIR + '/.bootmiss ] && rm -f ' + DIR + '/.bootmiss && echo 1', 3000).then(r => { if ((r.content || '').trim() === '1') { toast('引擎启动较慢,首次接管未挂载——已跳过防黑洞,请手动点「重启引擎」或「重新应用规则」', 'orange', 6000); opLog('启动慢提示: 首次接管未挂载(.bootmiss)——用户需手动重应用'); } }).catch(() => { });
   return o;
+  } finally { HS_COLLECT_BUSY = false }
 }
 /* 节点 UDP 能力探测: 对主组发 udp DNS 延迟测试,失败=节点不支持 UDP 转发
    (游戏/QUIC 流量送进去就是黑洞)。结果缓存 10 分钟,事件驱动调用。 */
 let HS_UDP_OK = null; let HS_UDP_T = 0;
+let HS_UDP_PREV = null; /* 审查P2: UDP 探测日志去重——状态变化才记(首次/由通转断),持续失败不重复 */
 let HS_UDP_BUSY = false; /* v1.8.5: in-flight 守卫——启动探活 8 次 collectStatus 期间会并发多次探测(审查 P2) */
 async function probeNodeUdp() {
   if (!ST.running) { HS_UDP_OK = null; return HS_UDP_OK }
@@ -477,25 +387,82 @@ async function probeNodeUdp() {
 async function probeNodeUdpInner() {
   if (!ST.running) { HS_UDP_OK = null; return HS_UDP_OK }
   HS_UDP_T = Date.now();
-  /* 第一证据=真实流量: 经节点出链且下行>0 的 UDP 连接(QUIC 等)——节点封 UDP:53 是机场惯例,
-     用 udp://DNS 探测会把"封53但UDP可用"误判成无 UDP,进而误降级 QUIC 破坏境外加速(真机教训) */
+  /* 唯一证据=真实流量: 经节点出链且下行>0 的 UDP 连接(QUIC 等)——节点封 UDP:53 是机场惯例,
+     用 DNS 探测会把"封53但UDP可用"误判成无 UDP(真机教训)。
+     v2.7.0: 删除 udp://8.8.8.8:53 假探测兑底——引擎 delay 接口仅认 http/https(Meta adapter.go
+     urlToMetadata 源码实证),udp:// 从未生效恒报失败,产生误导日志;无流量证据时=未知(null),
+     节点级真实实测改走 tunnels 隧道方案(节点页 🛰️ 测UDP 按钮调 probeUdpViaTunnel) */
   try {
     const cs = await apiGet('/connections');
     const mg = hsMainGroup();
-    const ev = cs && cs.connections && cs.connections.some(c => c.network === 'udp' && (c.download || 0) > 0
-      && (c.chains || []).some(x => x === mg));
+    const ev = hasUdpDownload(cs, mg);
     if (ev) {
       HS_UDP_OK = true;
-      /* 此前降级过的放行收回(QUIC 恢复走引擎) */
       run('iptables -t mangle -C HS_UDP -p udp -m multiport --dports 443,8443 -j RETURN 2>/dev/null && iptables -t mangle -D HS_UDP -p udp -m multiport --dports 443,8443 -j RETURN; echo ok', 5000).catch(() => { });
       return HS_UDP_OK
     }
   } catch (e) { }
-  /* 无流量证据时才用 :53 探测; 失败只提示不降级(防误伤) */
-  const r = await apiGet('/proxies/' + encodeURIComponent(hsMainGroup()) + '/delay?timeout=5000&url=' + encodeURIComponent('udp://8.8.8.8:53'));
-  HS_UDP_OK = !!(r && r.delay);
-  if (!HS_UDP_OK) await opLog('节点 UDP 探测未通过(可能是封 UDP:53 惯例,非必然无 UDP);QUIC 保持走引擎,游戏异常请换支持 UDP 的节点');
+  HS_UDP_OK = null; /* 未知:无流量证据,不判定不降级——节点页 🛰️ 可单节点实测 */
+  if (HS_UDP_PREV === true) await opLog('节点 UDP 流量证据消失(QUIC/游戏近期无 UDP 回流);已回未知态,QUIC 保持走引擎');
+  HS_UDP_PREV = HS_UDP_OK;
   return HS_UDP_OK;
+}
+/* v2.7.0 单节点 UDP 真实实测(tunnels 隧道): 当前配置内存追加临时 udp tunnel(绑指定节点→
+   8.8.8.8:53)热重载→设备 shell 用 nslookup 经隧道发真实 DNS 查询→解析成功=该节点真实
+   转发了 UDP 往返;finally 恢复原配置。两次内存热重载(PUT /configs 不落盘)。
+   真机实证(2026-10-04): ①busybox 无 nc applet,UDP 探测只能 nslookup(仅标准 53 口)
+   ②tunnel 必须绑 WAN 口 IP:53(dnsmasq 占 LAN/回环 53,WAN 侧空闲;PUT=204+解析成功+
+   BACK=204 全链验证) ③WAN 口蜂窝 NAT 后外网不可达且目标固定 8.8.8.8:53,几秒探测窗口无风险 */
+let HS_UDP_PROBE_BUSY = false;
+/* v2.8.9: PUT /configs 是全量重载(重解析+重连 provider),真机耗时可达 4s+——apiPut 的
+   curl -m 4 会切断拿不到状态码误报失败(用户实锤)。专用长超时版(15s) */
+async function apiPutSlow(path, body) {
+  const r = await run('curl -s -m 15 -X PUT -H "Authorization: Bearer ' + C.secret + '" -H "Content-Type: application/json" -w "\\n%{http_code}" -d ' + shq(JSON.stringify(body)) + ' ' + shq('http://127.0.0.1:' + C.ports.ctrl + path), 18000);
+  if (!r.success) return false;
+  const m = (r.content || '').match(/(\d{3})\s*$/);
+  return !!m && (m[1] === '200' || m[1] === '204');
+}
+async function probeUdpViaTunnel(nodeName) {
+  if (!ST.running) return { ok: false, why: '引擎未运行' };
+  if (HS_UDP_PROBE_BUSY) return { ok: false, why: '已有实测进行中,请稍候' };
+  HS_UDP_PROBE_BUSY = true;
+  try {
+    /* WAN 口 IP=默认路由源 IP(dnsmasq 未监听此地址的 53,tunnel 专属) */
+    const w = await run("ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++)if($i==\"src\"){print $(i+1);exit}}'", 6000);
+    const WIP = (w.content || '').trim().split(/\s+/)[0] || '';
+    if (!/^\d+\.\d+\.\d+\.\d+$/.test(WIP)) return { ok: false, why: '未能获取 WAN 口 IP(无默认路由?)' };
+    await refreshSubRaw();
+    const baseYaml = genConfigYaml();
+    if (baseYaml === null) return { ok: false, why: '配置生成失败(订阅解析异常)' };
+    if (baseYaml.indexOf('\ntunnels:') >= 0) return { ok: false, why: '配置已含 tunnels,跳过(防叠加)' };
+    const tunYaml = baseYaml + '\ntunnels:\n  - network: [udp]\n    address: ' + WIP + ':53\n    target: 8.8.8.8:53\n    proxy: ' + yamlEsc(nodeName) + '\n';
+    /* v2.8.1: payload 模式(大 JSON body)真机失败(用户实锢)——改 path 模式(写临时文件+PUT path,
+       真机端到端验证过的通道);base/恢复各一份临时文件,不依赖盘上 config.yaml 状态 */
+    const tunF = DIR + '/.udptun.yaml', baseF = DIR + '/.udpbase.yaml';
+    const w1 = await writeFile(baseF, baseYaml), w2 = await writeFile(tunF, tunYaml);
+    if (!w1 || !w2) { await run('rm -f ' + shq(tunF) + ' ' + shq(baseF), 4000); return { ok: false, why: '临时配置写入失败(磁盘?)' } }
+    const put1 = await apiPutSlow('/configs?force=true', { path: tunF });
+    if (!put1) { await apiPutSlow('/configs?force=true', { path: baseF }).catch(() => { }); await run('rm -f ' + shq(tunF) + ' ' + shq(baseF), 4000); return { ok: false, why: '热重载失败(临时隧道注入)' } }
+    await wait(900); /* 引擎加载 tunnel 监听 */
+    /* nslookup 经 WAN:53 隧道口发真实 DNS 查询(仅标准 53 口,真机实证唯一可行探测):
+       RC=0 且输出含 Address=解析成功,即节点真实转发了 UDP 往返 */
+    const probe = await run('nslookup example.com ' + WIP + ' >/tmp/.hsns 2>&1; RC=$?; rm -f /tmp/.hsns; echo RC=$RC', 12000);
+    const mRc = /RC=(\d+)/.exec(probe.content || '');
+    const rc = mRc ? parseInt(mRc[1], 10) : 1;
+    return { ok: rc === 0 };
+  } finally {
+    /* 恢复原配置: 重生成写入 base 临时文件后 PUT 其 path(与注入同通道);失败重试一次;清理临时文件 */
+    await refreshSubRaw();
+    const back = genConfigYaml();
+    if (back !== null) {
+      const bF = DIR + '/.udpbase.yaml';
+      await writeFile(bF, back);
+      const put2 = await apiPutSlow('/configs?force=true', { path: bF });
+      if (!put2) { await wait(1200); await apiPutSlow('/configs?force=true', { path: bF }).catch(() => { }); }
+    }
+    await run('rm -f ' + shq(DIR + '/.udptun.yaml') + ' ' + shq(DIR + '/.udpbase.yaml'), 4000);
+    HS_UDP_PROBE_BUSY = false;
+  }
 }
 /* 本机代理限时(面板优先): 设备侧 shell 睡眠到点摘 OUTPUT 接管(页面关闭也生效),写 .s2expired 标记;
    JS 侧在 collectStatus 事件驱动对账(关 C.s2+重烙 fw.sh),两层解耦 */
@@ -533,15 +500,13 @@ function openS2KeepDlg() {
 }
 /* 线路地址集签名: 有线路指派的设备 → mac+全部已知地址(v4当前IP+邻居表v6) */
 function lineSig() {
+  /* 方案A/F02: 签名只含线路|MAC——设备地址(arp4/neigh6 快照)不再参与,地址轮换/变更零触发;
+     neigh6 采集保留仅用于显示 */
   const lm = {}; (C.lines || []).forEach(L => { if (L && L.id) lm[L.id] = 1 });
   const parts = [];
   C.devices.forEach(d => {
     if (!d.line || !lm[d.line]) return;
-    const mac = String(d.mac || '').toUpperCase();
-    const ips = [];
-    if (okCidr(d.ip)) ips.push(String(d.ip));
-    Object.keys(ST.neigh6 || {}).forEach(v6 => { if (String(ST.neigh6[v6]).toUpperCase() === mac && okV6(v6)) ips.push(v6) });
-    parts.push(d.line + '|' + mac + '|' + ips.sort().join(','));
+    parts.push(d.line + '|' + String(d.mac || '').toUpperCase());
   });
   return parts.sort().join(';');
 }
@@ -558,36 +523,54 @@ async function syncLineRules() {
     const prev = HS_LINE_SIG; HS_LINE_SIG = sig;
     if (!sig) return; /* 已无线路指派,config 下次常规重写时自然去掉 */
     const yaml = genConfigYaml();
-    await writeFile(CFG, yaml);
+    if (yaml === null) { HS_LINE_SIG = prev; await opLog('线路地址跟随:订阅解析失败,跳过重写(旧配置保留)'); return }
+    /* F13: 写盘失败不发起热重载——apiPut 成功会令引擎内存与盘上配置分叉;回滚签名让下次采集重试(与 apiPut 失败分支同语义) */
+    if (!(await writeFile(CFG, yaml))) { HS_LINE_SIG = prev; await opLog('线路地址跟随:配置写盘失败,跳过热重载(当前配置保留,下次刷新重试)'); return }
     const ok = await apiPut('/configs?force=true', { path: '', payload: yaml });
     if (!ok) { HS_LINE_SIG = prev; await opLog('线路地址跟随:热重载失败,下次刷新重试'); return }
-    await opLog('设备线路地址变化,已自动跟随(热重载)');
+    /* 方案A: 线路成员(MAC)变化时 fw 层 MAC 集合与链路同步更新(签名防抖下低频,
+       正常改动经设备下拉/线路管理保存链已无条件 reapplyFw(见 refreshDevPaneInner/openLineDlg),此处为运行中其他来源变化(如并发改配置)的兜底) */
+    await reapplyFw();
+    await opLog('设备线路成员变化,已自动跟随(热重载+规则重应用)');
   } finally { HS_LINE_BUSY = false }
 }
-/* 设备采集(ARP+DHCP 合并,仅在设备弹窗打开/手动刷新时调用) */
+/* 设备采集(ip neigh+DHCP 合并,仅在设备弹窗打开/手动刷新时调用) */
 async function collectDevices() {
   const r = await run(
-    'cat /proc/net/arp 2>/dev/null | tail -n +2 | awk \'$3=="0x2" && $4!="00:00:00:00:00:00" {print $1" "$4}\';'
-    + 'cat /tmp/dhcp.leases 2>/dev/null | awk \'{print $3" "$2" "$4}\'', 8000);
+    'for ip in $(ip neigh show 2>/dev/null | awk \'$1 !~ /:/ && $4=="lladdr" && $6=="STALE" {print $1}\'); do ping -c 1 -W 1 "$ip" >/dev/null 2>&1; done;'
+    + 'ip neigh show 2>/dev/null | awk \'$1 !~ /:/ && $4=="lladdr" && $5!="00:00:00:00:00:00" {print "N "$1" "$5" "$6}\';'
+    + 'cat /tmp/dhcp.leases 2>/dev/null | awk \'{print "L "$3" "$2" "$4}\'', 15000);
   const map = {};
   (r.content || '').split('\n').forEach(l => {
-    const a = l.trim().split(/\s+/); if (a.length < 2) return;
-    const ip = a[0], mac = a[1];
+    const a = l.trim().split(/\s+/); if (a.length < 3) return;
+    const typ = a[0], ip = a[1], mac = a[2];
     if (!/^\d+\.\d+\.\d+\.\d+$/.test(ip) || !/^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/.test(mac)) return;
-    if (!map[ip]) map[ip] = { ip: ip, mac: mac, host: '' };
-    if (a[2] && a[2] !== '*' && !map[ip].host) map[ip].host = a[2];
+    if (!map[ip]) map[ip] = { ip: ip, mac: mac, host: '', online: false, neigh: false };
+    if (typ === 'N') {
+      const st = String(a[3] || '').toUpperCase();
+      map[ip].mac = mac; map[ip].neigh = true;
+      map[ip].online = /^(REACHABLE|DELAY|PROBE|PERMANENT)$/.test(st);
+    } else if (typ === 'L') {
+      if (!map[ip].neigh) map[ip].mac = mac;
+      if (a[3] && a[3] !== '*' && !map[ip].host) map[ip].host = a[3];
+    }
   });
-  /* 按 MAC 关联(设备身份稳定),IP 变了名字和白名单跟着设备走 */
+  /* 按 MAC 关联(设备身份稳定),IP 变了名字和白名单跟着设备走;
+     v2.7.0 忽略黑名单: 移除的设备 MAC 不再自动重新入库(ARP 残留/DHCP 租约会把它扫回来——
+     真机实测移除后刷新即复活;扫描与合并保留两段都跳过,恢复入口在设备页底部「已忽略」) */
+  const rmSet = {};
+  (Array.isArray(C.removedMacs) ? C.removedMacs : []).forEach(m => { const mac = typeof m === 'string' ? m : (m && m.mac); if (mac) rmSet[String(mac).toUpperCase()] = 1 });
   const known = {}; C.devices.forEach(d => { if (d.mac) known[d.mac.toUpperCase()] = d });
   const list = Object.keys(map).sort().map(ip => {
     const mac = map[ip].mac.toUpperCase();
+    if (rmSet[mac]) return null; /* 黑名单设备不入库(扫描段) */
     const k = known[mac] || null;
-    return { ip: ip, mac: mac, host: map[ip].host, name: k ? k.name : (map[ip].host || ('设备_' + ip.split('.').pop())), proxy: k ? k.proxy : false, line: k ? (k.line || '') : '', online: true };
-  });
+    return { ip: ip, mac: mac, host: map[ip].host, name: k ? k.name : (map[ip].host || ('设备_' + ip.split('.').pop())), proxy: k ? k.proxy : false, line: k ? (k.line || '') : '', online: !!map[ip].online };
+  }).filter(Boolean);
   /* v1.8.5 修: 此前整体替换 C.devices——离线设备(手机休眠/离网)被剔除,之后任一次保存即永久丢失
      其白名单/昵称/线路;改为合并:扫描到的更新为在线,未扫描到的保留并标 online:false(2026-09-13 审查 P1) */
   const seen = {}; list.forEach(d => { seen[d.mac.toUpperCase()] = 1 });
-  C.devices.filter(d => d && d.mac).forEach(d => {
+  C.devices.filter(d => d && d.mac && !rmSet[String(d.mac).toUpperCase()]).forEach(d => {
     if (!seen[d.mac.toUpperCase()]) list.push({ ip: d.ip, mac: d.mac, host: d.host || '', name: d.name, proxy: d.proxy, line: d.line || '', online: false });
   });
   C.devices = list;
@@ -626,8 +609,15 @@ function sanitizeConf() {
   C.devices = (Array.isArray(C.devices) ? C.devices : []).filter(d => d && typeof d === 'object' && okMac(d.mac))
     .map(d => { if (d.ip && !okCidr(d.ip) && !okV6(d.ip)) d.ip = ''; return d });
   /* v1.8.5: 浅拷贝断开与 DEF 模板的共享引用(j 缺该键时 C.x === DEF.x,后续 push 会污染模块级模板)(审查 P3) */
-  C.lines = Array.isArray(C.lines) ? C.lines.slice() : [];
+  C.lines = Array.isArray(C.lines) ? C.lines.slice(0, 8) : []; /* 方案A: 线路上限 8——listener 端口派生(主口+1000+2n)防漂移冲突 */
   C.subs = Array.isArray(C.subs) ? C.subs.slice() : [];
+  C.subs.forEach(s => { if (s && typeof s === 'object') { s.filter = normSubFilter(s.filter); if (s.ui && (typeof s.ui.total !== 'number' || s.ui.total < 0 || s.ui.total > 1e16)) s.ui = null } }); /* v2.7.4: ui=subscription-userinfo 快照(字节/时间戳),并常态防异常值 */
+  C.subFusion = !!C.subFusion;
+  C.v6Dns = !!C.v6Dns; /* v2.8.0-beta */
+  /* v2.7.9: 对象化 {mac,name,time};旧格式(纯 MAC 字符串)自动迁移 */
+  C.removedMacs = (Array.isArray(C.removedMacs) ? C.removedMacs : []).map(m => typeof m === 'string' ? { mac: m, name: '', time: '' } : m)
+    .filter(m => m && typeof m === 'object' && /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(String(m.mac || '')))
+    .map(m => ({ mac: String(m.mac).toUpperCase(), name: String(m.name || '').slice(0, 24), time: String(m.time || '').slice(0, 16) })).slice(0, 50);
   C.exclude = Array.isArray(C.exclude) ? C.exclude.slice() : [];
   C.force = Array.isArray(C.force) ? C.force.slice() : [];
   if (['self', 'merge', 'direct'].indexOf(C.policySrc) < 0) C.policySrc = 'self';
@@ -641,8 +631,9 @@ function genSecret() {
 const HS_GAME_DOMAINS = ['igamecj.com', 'proximabeta.com', 'pubghelper.com', 'pubgtool.com', 'gcloudcs.com',
   'gcloudsdk.com', 'gcloudsvcs.com', 'tencent-gcloud.com', 'midasbuy.com',
   'anticheatexpert.com', 'hoyoverse.com'];
-/* YAML 双引号串转义: 必须同时转义反斜杠与引号——只转引号时,值内任何 \x (如候选池 filter 的正则转义 \.)都是 YAML 非法转义,mihomo 解析 fatal(真机事故 2026-09-02) */
-function yamlEsc(t) { return '"' + String(t).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"' }
+/* YAML 双引号串转义: 必须同时转义反斜杠与引号——只转引号时,值内任何 \x (如候选池 filter 的正则转义 \.)都是 YAML 非法转义,mihomo 解析 fatal(真机事故 2026-09-02);
+   I04: 另须转义控制字符换行/回车/制表——VMess server 等字段含裸 \n 会破坏 YAML 结构(\n 在双引号风格中必须写 \n 转义形态) */
+function yamlEsc(t) { return '"' + String(t).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t') + '"' }
 function genConfigYaml() {
   const P = C.ports, sec = genSecret();
   const groups = [];
@@ -654,21 +645,34 @@ function genConfigYaml() {
   if (HS_MANUAL.length) {
     providers.manual = {
       type: 'file', path: './providers/manual.yaml',
-      'health-check': { enable: true, url: 'http://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true }
+      'health-check': { enable: true, url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true }
     };
   }
-  /* 订阅 providers(仅当前生效的) */
-  if (C.activeSub >= 0 && C.subs[C.activeSub]) {
-    const sub = C.subs[C.activeSub];
-    providers['sub' + C.activeSub] = {
-      type: 'http', url: sub.url, path: './providers/sub' + C.activeSub + '.yaml',
+  /* 订阅 providers(v2.7.0: 融合开启且合并模式时接入全部订阅,单订阅仅激活项;
+     每订阅挂 exclude-filter(有规则时,引擎侧原生过滤,规则改动热重载即生效)+
+     override.additional-prefix(融合时加[订阅名]前缀防撞名,v1.19.32 真机 -t 实证支持) */
+  const fusionOn = C.subFusion && mergeMode;
+  const subIdx = fusionOn ? C.subs.map((s, i) => (s && s.url) ? i : -1).filter(i => i >= 0)
+    : (C.activeSub >= 0 && C.subs[C.activeSub]) ? [C.activeSub] : [];
+  subIdx.forEach(i => {
+    const sub = C.subs[i];
+    const pv = {
+      type: 'http', url: sub.url, path: './providers/sub' + i + '.yaml',
       interval: 0,
-      'health-check': { enable: true, url: 'http://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true }
+      'health-check': { enable: true, url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true }
     };
-  }
+    const ex = buildSubExclude(sub.filter);
+    if (ex) pv['exclude-filter'] = ex;
+    const inc = buildSubInclude(sub.filter);
+    if (inc) pv.filter = inc; /* v2.7.0 地区「其他」排除: include 白名单(引擎 provider 原生 filter) */
+    if (fusionOn && subIdx.length > 1) pv.override = { 'additional-prefix': '[' + String(sub.name || ('订阅' + (i + 1))).slice(0, 12) + '] ' };
+    providers['sub' + i] = pv;
+  });
   /* 组链(四模式并存, 🚀默认指向当前模式) */
   const useList = Object.keys(providers).length ? Object.keys(providers) : [];
-  groups.push({ name: '🚀 节点选择', type: 'select', proxies: ['♻️ 自动选优', '⚖️ 负载均衡', '🪜 故障转移', 'DIRECT'].concat(useList.length ? [] : []), use: useList.length ? useList : undefined });
+  /* Y05: 主组引用与子组生成联动——空 useList(无手动节点无订阅)时三子组不生成,主组若仍引用即悬空
+     (mihomo -t fatal 'not found');空时主组仅 DIRECT,有节点路径零变化 */
+  groups.push({ name: '🚀 节点选择', type: 'select', proxies: useList.length ? ['♻️ 自动选优', '⚖️ 负载均衡', '🪜 故障转移', 'DIRECT'] : ['DIRECT'], use: useList.length ? useList : undefined });
   const defaultIdx = { auto: 0, balance: 1, fallback: 2, manual: 0 }[C.mode] || 0;
   if (useList.length) {
     groups[0].proxies = ['♻️ 自动选优', '⚖️ 负载均衡', '🪜 故障转移', 'DIRECT'];
@@ -679,10 +683,11 @@ function genConfigYaml() {
   }
   /* LINE_OK=本次实际生成的线路组名集合: SRC 规则只引用已生成的组——防无节点时组未生成而规则悬空,mihomo 启动 fatal */
   const LINE_OK = {};
+  const LN_IDS = []; const LN_NAMES = {}; /* 方案A: 线路→listener/IN-NAME/fw 同源消费(声明前置防 TDZ:线路组块先于此处填入) */
   if (useList.length) {
-    groups.push({ name: '♻️ 自动选优', type: 'url-test', url: 'http://www.gstatic.com/generate_204', interval: +C.iv || 300, tolerance: 50, lazy: true, use: useList });
-    groups.push({ name: '⚖️ 负载均衡', type: 'load-balance', strategy: 'consistent-hashing', url: 'http://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true, use: useList });
-    groups.push({ name: '🪜 故障转移', type: 'fallback', url: 'http://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true, use: useList });
+    groups.push({ name: '♻️ 自动选优', type: 'url-test', url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, tolerance: 50, use: useList });
+    groups.push({ name: '⚖️ 负载均衡', type: 'load-balance', strategy: 'consistent-hashing', url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, use: useList });
+    groups.push({ name: '🪜 故障转移', type: 'fallback', url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, use: useList });
     /* 分设备线路组(每条线路一个独立 select;重名跳过防 YAML 组名冲突;
        锁定模式支持多选节点: 1个=default锁定该节点, 多个=生成"·优选"url-test子组在候选池里自动挑最快;
        候选池用 provider filter 实现(file 型复用同一订阅文件,零重复下载), provider id 过白名单防 YAML key 注入) */
@@ -698,10 +703,17 @@ function genConfigYaml() {
       let def, proxies = ['♻️ 自动选优', '⚖️ 负载均衡', '🪜 故障转移', 'DIRECT'], use = useList;
       if (L.mode === 'node' && nodes.length) {
         const pid = 'ln_' + L.id;
-        const flt = nodes.map(escRe).join('|');
-        use = useList.map(src => {
+        /* F09: filter 完整锚定 ^(?:...)$ ——行正则层与真实内核行为对齐;
+           F09-r2 同名跨源去重(互斥拆分): 点名∩HS_MANUAL 只进 ln_*_manual(HS_MANUAL 名必有 manual 源),
+           其余点名只进订阅源 provider——每个名字至多被一个池 provider 命中,池 all 无重复(集合语义) */
+        const manualSet = new Set(HS_MANUAL);
+        const subPicked = nodes.filter(n => !manualSet.has(n));
+        const manualPicked = nodes.filter(n => manualSet.has(n));
+        const flt = '^(?:' + subPicked.map(escRe).join('|') + ')$';
+        const manualFlt = '^(?:' + manualPicked.map(escRe).join('|') + ')$';
+        use = useList.filter(src => (src === 'manual' ? manualPicked.length : subPicked.length)).map(src => {
           const key = pid + '_' + src;
-          providers[key] = { type: 'file', path: providers[src].path, filter: flt, 'health-check': { enable: true, url: 'http://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true } };
+          providers[key] = { type: 'file', path: providers[src].path, filter: (src === 'manual' ? manualFlt : flt), 'health-check': { enable: true, url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true } };
           return key;
         });
         if (nodes.length === 1 || L.pick === 'manual') { def = lineDefOf(L) }
@@ -709,17 +721,18 @@ function genConfigYaml() {
           /* 池内策略子组: 优选=url-test / 均衡=load-balance / 转移=fallback */
           def = linePoolName(nm); proxies = proxies.concat([def]);
           const st = ({ auto: 'url-test', balance: 'load-balance', fallback: 'fallback' })[L.pick] || 'url-test';
-          const sub = { name: def, type: st, url: 'http://www.gstatic.com/generate_204', interval: +C.iv || 300, tolerance: 50, lazy: true, use: use };
+          const sub = { name: def, type: st, url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, tolerance: 50, lazy: true, use: use };
           if (st === 'load-balance') sub.strategy = 'consistent-hashing';
-          sub._pool = nodes; /* merge 模式静态化候选(自建序列化只输出已知字段,此标记无害) */
+          sub._pool = nodes; sub._lineId = L.id; /* merge 模式静态化候选(自建序列化只输出已知字段,此标记无害) */
           groups.push(sub);
         }
       } else {
         def = ({ auto: '♻️ 自动选优', balance: '⚖️ 负载均衡', fallback: '🪜 故障转移' }[L.mode] || '♻️ 自动选优');
       }
       LINE_OK[nm] = 1;
+      LN_IDS.push(L.id); LN_NAMES[L.id] = nm; /* 方案A: 与 fw 同源同序(id+name 校验一致),供 listeners 段与 IN-NAME 规则消费 */
       const lg = { name: lineGName(nm), type: 'select', proxies: proxies, use: use, default: def };
-      if (L.mode === 'node' && nodes.length) lg._cand = nodes; /* merge 模式: 指定节点线路的静态候选 */
+      if (L.mode === 'node' && nodes.length) { lg._cand = nodes; lg._lineId = L.id; } /* merge 模式: 指定节点线路的静态候选 */
       groups.push(lg);
     });
   }
@@ -739,19 +752,12 @@ function genConfigYaml() {
     else if (x.m === 'exact') rules.push('DOMAIN,' + x.v + ',DIRECT');
     /* cidr 在防火墙层排除,不走 mihomo */
   });
-  /* 分设备线路: 按源地址路由到线路组(优先级已定案=强制/排除之后、国内直通之前;
-     v4 取设备当前 IP,v6 取邻居表按 MAC 反查的全部已知地址——隐私扩展轮换由 syncLineRules 自动跟随) */
-  (() => {
-    const lm = {}; (C.lines || []).forEach(L => { if (L && L.id && L.name) lm[L.id] = String(L.name) });
-    C.devices.forEach(d => {
-      const nm = lm[d.line]; if (!nm || !LINE_OK[nm]) return;
-      const mac = String(d.mac || '').toUpperCase();
-      const ips = [];
-      if (okCidr(d.ip)) ips.push(String(d.ip));
-      Object.keys(ST.neigh6 || {}).forEach(v6 => { if (String(ST.neigh6[v6]).toUpperCase() === mac && okV6(v6)) ips.push(v6) });
-      ips.forEach(ip => rules.push('SRC-IP-CIDR,' + ip + (ip.indexOf(':') >= 0 ? '/128' : '/32') + ',' + lineGName(nm)));
-    });
-  })();
+  /* 分设备线路(方案A): 设备身份=MAC——引擎侧不再生成 SRC-IP-CIDR 地址快照规则(F02: 地址轮换/变更不再失联);
+     线路出口经专属 listener(hsln_<id>)+IN-NAME 规则路由,设备→线路的分派在 fw 层 MAC ipset(见 genFwSh);
+     线路组生成块内记 LN_IDS(与 fw 同源同序),此处只消费 */
+  /* 分设备线路(方案A): 设备身份=MAC——引擎侧不再生成 SRC-IP-CIDR 地址快照规则(F02: 地址轮换/变更不再失联);
+     线路出口经专属 listener(hsln_<id>)+IN-NAME 规则路由,设备→线路的分派在 fw 层 MAC ipset(见 genFwSh);
+     LN_IDS/LN_NAMES 由线路组生成块填入(见上),此处无需地址枚举 */
   /* 地理数据缺失(卸载重装未装)时跳过 GEO 规则: mihomo 缺文件会自行去 GitHub 下载(设备必空挂)=首启卡死根因;
      跳过后国内直通由防火墙 chnroute 兜底(ipset 内核态,不依赖 GEO),装好地理数据后规则自动恢复 */
   /* 国际版游戏出海域名例外(2026-09-06 真机实锤: geosite:cn 收录腾讯系出海域名,PUBG 全系被误判直连):
@@ -762,12 +768,27 @@ function genConfigYaml() {
      去 no-resolve——域名连接解析真实 IP 后参与国内判定(治企业内网域名类盲区),最坏=多一次解析后继续兜底 */
   if (ST.chn > 0) rules.push('RULE-SET,china_ip,DIRECT');
   else if (ST.geoIpT > 0) rules.push('GEOIP,CN,DIRECT,no-resolve');
+  /* 方案A/F03: 线路出口路由位于国内 DIRECT 之后——进线路 listener 的国内流量仍 DIRECT(不被线路出口劫走),
+     海外走线路组;设备→线路分派在 fw 层 MAC 集合,引擎侧身份=listener 名(与设备地址解耦) */
+  LN_IDS.forEach(id => {
+    rules.push('IN-NAME,hsln_' + id + ',' + lineGName(LN_NAMES[id] || id));
+    rules.push('IN-NAME,hsln_' + id + 't,' + lineGName(LN_NAMES[id] || id));
+  });
   rules.push('MATCH,🚀 节点选择');
   /* YAML 序列化 */
   let y = '# 小海关生成 · ' + nowStr() + '\n#gen:v' + V + '\n';
   y += 'mixed-port: ' + P.mixed + '\n';
   y += 'redir-port: ' + P.redir + '\n';
   y += 'tproxy-port: ' + P.tproxy + '\n';
+  /* 方案A: 每线路一对专属 listener(redir 仅 TCP+ tproxy 带 udp),name=hsln_<id>(tproxy 加 t 后缀);
+     端口派生=主口+1000+2n(n=线路同源序,sanitizeConf 限线路≤8 防漂移);无线路时不输出本段(与旧形态同构) */
+  if (LN_IDS.length) {
+    y += 'listeners:\n';
+    LN_IDS.forEach((id, i) => {
+      y += '  - name: hsln_' + id + '\n    type: redir\n    listen: 0.0.0.0\n    port: ' + (P.redir + 1000 + 2 * i) + '\n';
+      y += '  - name: hsln_' + id + 't\n    type: tproxy\n    listen: 0.0.0.0\n    port: ' + (P.tproxy + 1000 + 2 * i) + '\n    udp: true\n';
+    });
+  }
   y += 'allow-lan: true\n';
   y += 'bind-address: "*"\n';
   y += 'mode: rule\n';
@@ -776,18 +797,22 @@ function genConfigYaml() {
   y += 'secret: ' + yamlEsc(sec) + '\n';
   y += 'routing-mark: 6666\n';
   y += 'geodata-loader: memconservative\n';
+  y += 'tcp-concurrent: true\n'; /* v2.5.0: TCP 并发握手取最快(wiki.metacubex.one config/general) */
+  /* v2.6.0: 删 global-client-fingerprint——Mihomo v1.19.32 已废弃此字段(真机运行日志 error 实证)，指纹伪装需逐节点设 client-fingerprint，暂不实现 */
   y += 'geo-auto-update: false\n';
-  y += 'store-selected: true\n';
-  y += 'store-fake-ip: true\n';
+  y += 'profile:\n'; /* F08: 持久化键迁入 profile 块——顶层错误字段被 v1.19.32 忽略
+     (StoreSelected 默认 true 此前救了选择持久化;StoreFakeIP 默认 false 致 fake-ip 映射未持久化);
+     显式 true 保留:fake-ip 持久化开启属行为增强 */
+  y += '  store-selected: true\n';
+  y += '  store-fake-ip: true\n';
   y += '\n# DNS\n';
   y += 'dns:\n';
   y += '  enable: true\n';
   y += '  listen: 0.0.0.0:' + P.dns + '\n';
   y += '  enhanced-mode: fake-ip\n';
-  /* DNS 不回 AAAA: 本机 ip6tables 无 ipset 模块,v6 国内直通无法内核态放行——
-     终端若拿 v6 地址会优先 v6 连接→全部涌入 mihomo 用户态(弱 CPU 瓶颈,微信/QQ 图片慢/失败的真因,2026-09-02 实证);
-     禁 AAAA 后终端走 v4→chnroute ipset 内核直通;v6 接管链仍保留(处理硬编码 v6 直连流量,防泄露不退让) */
-  y += '  ipv6: false\n';
+  /* DNS AAAA 策略(v2.8.0-beta 实验开关): 默认不回 AAAA——弱 CPU 终端全 v4+内核态直通最稳;
+     开启恢复 AAAA——v6 直通链(三网前缀 RETURN)已在,国内 v6 内核态放行,境外 v6 走接管链 */
+  y += '  ipv6: ' + (C.v6Dns ? 'true' : 'false') + '\n';
   y += '  fake-ip-range: 198.18.0.1/16\n';
   /* 国内直通配合: geosite:cn 域名返回真实 IP → 防火墙 chnroute 命中 → 内核态直连不进 mihomo;
      stun/NTP 类本就需真实 IP */
@@ -839,10 +864,12 @@ function genConfigYaml() {
        强制/排除/出海例外注入订阅 rules 最前(排除→DIRECT 保留,强制/例外 target=订阅首个 select 组) */
     subBlocks = extractSubBlocks(HS_SUB_RAW);
     if (!subBlocks.ok) {
-      opLog('订阅策略直通失败(' + subBlocks.why + '),本次回退自建调度');
-      toast('⚠️ 订阅不含完整策略(缺节点或规则段),已回退自建调度', 'warn');
-      subMode = false; /* 回退: 放开自建 groups/rules 序列化守卫 */
-    } else {
+      /* F05: 解析失败不再静默回退自建调度——中止本次应用,旧配置不动(各写盘点 null 守卫) */
+      opLog('订阅策略直通失败(' + subBlocks.why + '),本次不应用,保留原配置');
+      toast('⚠️ 订阅解析失败,本次不应用(已保留原配置)', 'red');
+      return null;
+    }
+    {
       const tgt = firstSelectGroup(HS_SUB_RAW);
       /* IP 类条目翻译规则(掩码规整用外层 cidrNorm): 排除类 cidr 不进 mihomo——防火墙层 EXCIDRS 已排除(与自建模式同语义);
          直通模式曾把裸 IP 排除项(172.18.32.188)译成 IP-CIDR 致非法 CIDR fatal(2026-09-12 升级失败实锤) */
@@ -864,23 +891,48 @@ function genConfigYaml() {
         else if (ST.geoIpT > 0) inject.push('GEOIP,CN,DIRECT,no-resolve');
       }
       else { console.log('[小海关] 订阅无 select 组,强制清单/出海例外/国内兜底未注入(订阅规则自管)'); } /* genConfigYaml 是同步函数,留痕走 console */
-      let yml = subBlocks.yaml;
-      /* china_ip 规则集(chnroute 同源): 订阅已有 china_ip 键则不注入(重名 YAML 冲突,订阅自己的同义生效) */
-      if (ST.chn > 0 && tgt && !/^[ \t]+china_ip:/m.test(yml)) { /* v1.8.5: 任意缩进都算已存在,防重复键 */
-        const CHNP = '  china_ip:\n    type: file\n    behavior: ipcidr\n    format: text\n    path: ' + yamlEsc('./rules/china_ip.txt') + '\n    interval: 0\n';
-        const rpM = /^rule-providers:\n/m;
-        yml = rpM.test(yml)
-          ? yml.replace(rpM, 'rule-providers:\n' + CHNP)   /* 订阅自带 rule-providers: 追加成员(缩进对齐块式) */
-          : yml.replace(/(^rules:\n)/m, 'rule-providers:\n' + CHNP + '\n$1'); /* 无则整段新增 */
+      /* F05 结构化合成: 订阅解析结果(锚点/别名已保真或展开)+本方注入,由 YAML.stringify 序列化
+         (缩进/引号/特殊字符转义交给解析库,不再手拼文本/正则注入) */
+      const D = subBlocks.data;
+      if (tgt && ST.chn > 0 && !(D['rule-providers'] && D['rule-providers'].china_ip)) {
+        (D['rule-providers'] = D['rule-providers'] || {})['china_ip'] = { type: 'file', behavior: 'ipcidr', format: 'text', path: './rules/china_ip.txt', interval: 0 };
       }
-      /* 规则注入: 订阅 rules: 行后插入本方规则(最前=最高优先);
-         注入行缩进必须跟随订阅 rules 列表项的实际缩进——机场生成风格 2/4 空格不一,写死 2 空格遇 4 空格订阅
-         即块序列缩进错乱,mihomo -t 报 "did not find expected '-' indicator"(2026-09-12 真机实锤,line 128) */
-      const indM = yml.match(/^rules:\n([ \t]*)-/m);
-      const inj = inject.length ? inject.map(r => (indM ? indM[1] : '  ') + '- ' + yamlEsc(r)).join('\n') + '\n' : '';
-      const merged = yml.replace(/(^rules:\n)/m, '$1' + inj);
-      y += '\n# ===== 订阅策略直通(v' + V + '): 以下 proxies/groups/rules 原样来自订阅 =====\n';
-      y += merged + '\n';
+      if (inject.length && Array.isArray(D.rules)) D.rules = inject.concat(D.rules);
+      /* v2.7.26 直通悬空清理(用户实锄: 直通+更新订阅报「proxy group: '最新官网: inou...' not found」——
+         订阅生成器自身带死引用,Clash 系客户端容错跳过而 mihomo -t 严格 fatal,更新即应用失败):
+         组成员仅允许 已存在节点/其他组/内置目标;规则 target 同校验;清理计数留痕 */
+      if (Array.isArray(D.proxies)) {
+        const nodeName = new Set(D.proxies.map(p => p && typeof p === 'object' && !Array.isArray(p) ? String(p.name != null ? p.name : '') : '').filter(Boolean));
+        const grpName = new Set((Array.isArray(D['proxy-groups']) ? D['proxy-groups'] : []).map(g => g && typeof g === 'object' ? String(g.name != null ? g.name : '').trim() : '').filter(Boolean));
+        const BUILTIN = new Set(['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS', 'COMPATIBLE', 'GLOBAL', 'REJECT-DROP']);
+        let dropM = 0, dropG = 0, dropR = 0;
+        const keepGrp = [];
+        (Array.isArray(D['proxy-groups']) ? D['proxy-groups'] : []).forEach(g => {
+          if (!g || typeof g !== 'object' || Array.isArray(g)) return;
+          if (Array.isArray(g.proxies)) {
+            const before = g.proxies.length;
+            g.proxies = g.proxies.filter(n => typeof n !== 'string' ? true : (nodeName.has(n) || grpName.has(n) || BUILTIN.has(n) || n === 'no-resolve'));
+            dropM += before - g.proxies.length;
+          }
+          if ((!Array.isArray(g.proxies) || !g.proxies.length) && !g.use) { dropG++; return }
+          keepGrp.push(g);
+        });
+        if (dropG || (Array.isArray(D['proxy-groups']) && keepGrp.length !== D['proxy-groups'].length)) D['proxy-groups'] = keepGrp;
+        const okT = new Set([...nodeName, ...grpName, ...BUILTIN]);
+        if (Array.isArray(D.rules)) {
+          D.rules = D.rules.filter(r => {
+            if (typeof r !== 'string') return true;
+            const parts = r.split(',');
+            const T = ['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'DOMAIN-REGEX', 'GEOSITE', 'IP-CIDR', 'IP-CIDR6', 'GEOIP', 'SRC-IP-CIDR', 'DST-PORT', 'SRC-PORT'].includes(parts[0])
+              ? parts[parts.length - 1].replace(/,no-resolve$/, '').trim() : null;
+            if (T && !okT.has(T)) { dropR++; return false }
+            return true;
+          });
+        }
+        if (dropM || dropG || dropR) console.log('[小海关] 直通悬空清理: 组成员-' + dropM + ' 空组-' + dropG + ' 规则-' + dropR);
+      }
+      y += '\n# ===== 订阅策略直通(v' + V + '): 订阅策略经真实 YAML 解析后生效 =====\n';
+      y += subYaml(D) + '\n';
       return y;
     }
   } else if (mergeMode) {
@@ -890,70 +942,183 @@ function genConfigYaml() {
        组名冲突(订阅组与本地组重名)丢弃订阅组=本地为准;china_ip 数据集冲突时保留本地 chnroute 同源版 ===== */
     subBlocks = extractSubBlocks(HS_SUB_RAW);
     if (!subBlocks.ok) {
-      opLog('合并模式合成失败(' + subBlocks.why + '),本次回退自建调度');
-      toast('⚠️ 订阅不含完整策略(缺节点或规则段),已回退自建调度', 'warn');
-      mergeMode = false; /* 回退自建序列化 */
-    } else {
-      const B = subBlocks.blocks;
-      /* 订阅节点名提取(flow "- { name: X" 与 block "- name: X" 两种形态) */
-      const subNodeNames = [];
-      (B.proxies || []).forEach(l => {
-        const m = l.match(/^\s*-\s*(?:\{\s*)?name:\s*'?([^,'"}]+)/);
-        if (m) subNodeNames.push(m[1].trim());
-      });
+      /* F05: 解析失败不再静默回退自建调度——中止本次应用,旧配置不动(各写盘点 null 守卫) */
+      opLog('合并模式合成失败(' + subBlocks.why + '),本次不应用,保留原配置');
+      toast('⚠️ 订阅解析失败,本次不应用(已保留原配置)', 'red');
+      return null;
+    }
+    {
+      const D = subBlocks.data;
+      /* v2.7.0 过滤+融合(静态节点层): 过滤对激活订阅 proxies 直接生效(merge 模式节点
+         全静态化,provider 层 exclude-filter 对此无效,必须在顶层化前删);
+         融合=其他订阅原文(异步侧 refreshSubRaw 预载 HS_SUB_RAW_ALL)解析+各自过滤+
+         全部改名加[订阅名]前缀后并入——组静态化/线路点名/订阅组引用均从下方 subNodeNames
+         派生,自动包含融合节点;订阅组与规则仍仅取激活订阅(融合的是节点池,不合并策略) */
+      const actFilter = C.subs[C.activeSub] ? normSubFilter(C.subs[C.activeSub].filter) : null;
+      if (actFilter) {
+        const exRe = buildSubExclude(actFilter); const re = exRe ? new RegExp(exRe) : null;
+        const inReS = buildSubInclude(actFilter); const inRe = inReS ? new RegExp(inReS) : null; /* v2.7.0:「其他」排除 include */
+        if (re || inRe) D.proxies = (Array.isArray(D.proxies) ? D.proxies : []).filter(p => !(p && typeof p === 'object' && ((re && re.test(String(p.name || ''))) || (inRe && !inRe.test(String(p.name || ''))))));
+      }
+      let actMapRef = null; /* 融合时全订阅 裸名→前缀名映射(供订阅组成员/线路点名/规则target改名;审查问题1+2: 线路与规则也可能存裸名) */
+      if (fusionOn && HS_SUB_RAW_ALL) {
+        const prefixOf = nm => '[' + String(nm || '').slice(0, 12) + '] ';
+        const seenNames = new Set();
+        const mergedPx = [];
+        const actPre = prefixOf(C.subs[C.activeSub].name);
+        const actMap = new Map(); /* 全订阅 裸名→前缀名(激活订阅先填,其他订阅各自填;同名裸名先到先得——通常命名风格不同无碰撞) */
+        (Array.isArray(D.proxies) ? D.proxies : []).forEach(p => {
+          if (p && typeof p === 'object' && !Array.isArray(p)) {
+            const cp = Object.assign({}, p); const orig = String(cp.name || '');
+            cp.name = actPre + orig;
+            if (!actMap.has(orig)) actMap.set(orig, cp.name);
+            actMapRef = actMap;
+            if (!seenNames.has(cp.name)) { seenNames.add(cp.name); mergedPx.push(cp) }
+          }
+        });
+        C.subs.forEach((sb, j) => {
+          if (!sb || !sb.url || j === C.activeSub) return;
+          const raw = HS_SUB_RAW_ALL[j];
+          if (!raw) return;
+          const blk = extractSubBlocks(raw);
+          if (!blk.ok) { opLog('融合:订阅「' + sb.name + '」解析失败跳过(' + blk.why + ')'); return }
+          const fx = normSubFilter(sb.filter);
+          const ex2 = buildSubExclude(fx); const re2 = ex2 ? new RegExp(ex2) : null;
+          const in2s = buildSubInclude(fx); const re2i = in2s ? new RegExp(in2s) : null;
+          (Array.isArray(blk.data.proxies) ? blk.data.proxies : []).forEach(p => {
+            if (!p || typeof p !== 'object' || Array.isArray(p)) return;
+            const nm = String(p.name || '');
+            if (re2 && re2.test(nm)) return;
+            if (re2i && !re2i.test(nm)) return;
+            const cp = Object.assign({}, p); cp.name = prefixOf(sb.name) + nm;
+            if (!actMap.has(nm)) actMap.set(nm, cp.name); /* 其他订阅裸名也进映射(线路点名可能引用) */
+            if (!seenNames.has(cp.name)) { seenNames.add(cp.name); mergedPx.push(cp) }
+          });
+        });
+        if (mergedPx.length) D.proxies = mergedPx;
+        console.log('[小海关] 融合已开启: 节点池 ' + D.proxies.length + '(含全部订阅,前缀标记)');
+      }
+      /* 订阅节点名(结构化提取;名称含逗号/引号/特殊字符均由解析器保证正确) */
+      const subNodeNames = (Array.isArray(D.proxies) ? D.proxies : [])
+        .map(p => (p && typeof p === 'object' && !Array.isArray(p) && typeof p.name === 'string') ? p.name : null)
+        .filter(n => n);
       const nodeSet = new Set(subNodeNames);
       const hasManual = HS_MANUAL.length > 0;
       const manOK = n => hasManual && HS_MANUAL.indexOf(n) >= 0;
       /* 组链静态化: use provider → 订阅节点静态成员(池组/指定线路只收各自候选) */
       groups.forEach(g => {
-        if (g._pool) { g.proxies = (g._pool || []).filter(n => nodeSet.has(n) || manOK(n)); g.use = hasManual ? ['manual'] : undefined }
-        else if (g._cand) { g.proxies = (g.proxies || []).concat((g._cand || []).filter(n => nodeSet.has(n) || manOK(n))); g.use = hasManual ? ['manual'] : undefined }
+        /* F09: 手选池不再 use 整个 manual provider(全量污染)——订阅节点静态化(已顶层化),
+           手选节点若被本线路点名则建线路专属 manual provider(filter 锚定显式名单);
+           v2.7.0 融合审查问题1: 线路保存的裸节点名在此统一映射为前缀名(融合前存的老配置兼容) */
+        const mapN = n => (actMapRef && typeof n === 'string' && actMapRef.has(n)) ? actMapRef.get(n) : n;
+        if (g.default && actMapRef && actMapRef.has(g.default)) g.default = actMapRef.get(g.default);
+        if (g._pool) {
+          g._pool = g._pool.map(mapN);
+          g.proxies = (g._pool || []).filter(n => nodeSet.has(n));
+          const manualPicked = (g._pool || []).filter(n => manOK(n) && !nodeSet.has(n)); /* 同名已在订阅静态化,不重复建源 */
+          if (hasManual && manualPicked.length && g._lineId) {
+            const key = 'ln_' + g._lineId + '_manual';
+            const escRe2 = t => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            providers[key] = { type: 'file', path: './providers/manual.yaml', filter: '^(?:' + manualPicked.map(escRe2).join('|') + ')$', 'health-check': { enable: true, url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true } };
+            g.use = [key];
+          } else g.use = undefined; /* 线路点名场景: 点名已全部静态化/建专属源,不再挂全量 manual(防污染) */
+        }
+        else if (g._cand) {
+          g._cand = g._cand.map(mapN);
+          /* F09: 指定线路主组同款精确边界——订阅点名静态化,手选点名经线路专属 manual provider(锚定 filter) */
+          g.proxies = (g.proxies || []).concat((g._cand || []).filter(n => nodeSet.has(n)));
+          const manualPicked = (g._cand || []).filter(n => manOK(n) && !nodeSet.has(n)); /* 同名已在订阅静态化,不重复建源 */
+          if (hasManual && manualPicked.length && g._lineId) {
+            const key = 'ln_' + g._lineId + '_manual';
+            const escRe2 = t => String(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            providers[key] = { type: 'file', path: './providers/manual.yaml', filter: '^(?:' + manualPicked.map(escRe2).join('|') + ')$', 'health-check': { enable: true, url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true } };
+            g.use = [key];
+          } else g.use = undefined; /* 线路点名场景: 点名已全部静态化/建专属源,不再挂全量 manual(防污染) */
+        }
         else if (g.use) { g.proxies = (g.proxies || []).concat(subNodeNames); g.use = hasManual ? ['manual'] : undefined }
       });
-      /* 订阅组逐条目: 与本地组重名→丢弃(本地为准) */
+      /* 订阅组: 结构化过滤(重名丢弃=本地为准),序列化交给 subYaml(缩进/转义由库处理);
+         融合时组成员引用同步加前缀(成员是本订阅节点→映射到前缀名;是组名/未知项不动) */
       const selfGroupNames = new Set(groups.map(g => g.name));
-      const grpEnt = []; let curE = null;
-      (B['proxy-groups'] || []).forEach(l => {
-        if (/^\s*-\s/.test(l)) { if (curE) grpEnt.push(curE); curE = [l] }
-        else if (curE) curE.push(l);
-      });
-      if (curE) grpEnt.push(curE);
       const keptGrp = [];
-      grpEnt.forEach(ent => {
-        const nm = (ent[0].match(/^\s*-\s*(?:\{\s*)?name:\s*'?([^,'"}]+)/) || [])[1];
-        const name = nm && nm.trim();
+      /* v2.7.0 修复(真机实证): 过滤删节点后订阅组成员可能悬空(如组员引用被滤掉的信息节点
+         「最新官网:xxx」→ mihomo 校验 fatal「proxy group: 'xxx' not found」→ 配置应用失败)。
+         收集全部订阅组名,组成员只允许:节点名(必须已被过滤后仍存在) / 其他组名 / 内置目标 */
+      const subGrpNames = new Set();
+      (Array.isArray(D['proxy-groups']) ? D['proxy-groups'] : []).forEach(g => {
+        if (g && typeof g === 'object' && !Array.isArray(g)) { const n = String(g.name != null ? g.name : '').trim(); if (n) subGrpNames.add(n) }
+      });
+      const BUILTIN_TGT = new Set(['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS', 'COMPATIBLE', 'GLOBAL', 'no-resolve', 'dns']);
+      const dropGrpMemberN = { n: 0 };
+      (Array.isArray(D['proxy-groups']) ? D['proxy-groups'] : []).forEach(g => {
+        if (!g || typeof g !== 'object' || Array.isArray(g)) return;
+        const name = String(g.name != null ? g.name : '').trim();
         if (!name || selfGroupNames.has(name)) return;
         selfGroupNames.add(name);
-        /* 缩进归一: 订阅组条目缩进(常见4空格)统一剥到本地组链的2空格,防同序列混缩进 YAML 解析失败 */
-        const lead = (ent[0].match(/^\s*/) || [''])[0].length;
-        const cut = Math.max(0, lead - 2);
-        keptGrp.push(ent.map(l => (l.length >= cut && l.slice(0, cut).trim() === '') ? l.slice(cut) : l).join('\n'));
+        if (fusionOn && Array.isArray(g.proxies)) {
+          g.proxies = g.proxies.map(n => (typeof n === 'string' && actMapRef && actMapRef.has(n)) ? actMapRef.get(n) : n);
+        }
+        /* 成员悬空清理: 节点必须仍在(过滤后 nodeSet 未建——此处先收后清,见下方统一清理) */
+        if (Array.isArray(g.proxies)) {
+          const before = g.proxies.length;
+          g.proxies = g.proxies.filter(n => typeof n !== 'string' ? true : (subGrpNames.has(n) || BUILTIN_TGT.has(n) || subNodeNames.indexOf(n) >= 0));
+          dropGrpMemberN.n += before - g.proxies.length;
+        }
+        if (Array.isArray(g.proxies) && !g.proxies.length && !g.use) return; /* 清后空组且无 use → 整组丢弃 */
+        keptGrp.push(g);
       });
-      /* 订阅规则: 去引号归一,按"类型+匹配值"去重(与本地撞车=本地为准),丢 MATCH,target 存在性校验 */
+      if (dropGrpMemberN.n) console.log('[小海关] 合并模式: 订阅组悬空成员清理 ' + dropGrpMemberN.n + ' 个(被过滤节点/失效引用)');
+      /* 订阅规则: 基于解析后的规则字符串。保守结构化拆分(已知简单类型),复杂逻辑规则
+         (SUB-RULE/逻辑规则/含额外参数)保持原文透传并计数——不再按逗号盲拆(F05) */
       const localRules = rules.slice(0, -1); /* 去掉自建 MATCH */
+      const SIMPLE_TYPES = new Set(['DOMAIN', 'DOMAIN-SUFFIX', 'DOMAIN-KEYWORD', 'DOMAIN-REGEX', 'GEOSITE', 'IP-CIDR', 'IP-CIDR6', 'IP-SUFFIX', 'SRC-IP-CIDR', 'SRC-PORT', 'DST-PORT', 'GEOIP', 'SRC-GEOIP', 'PROCESS-NAME', 'PROCESS-PATH', 'PROCESS-PATH-REGEX', 'NETWORK', 'UID', 'IN-TYPE', 'IN-USER', 'IN-NAME']);
+      const parseRule = t => {
+        const c = t.indexOf(',');
+        if (c < 0) return null;
+        const type = t.slice(0, c);
+        if (!SIMPLE_TYPES.has(type)) return null;
+        const pp = [type].concat(t.slice(c + 1).split(','));
+        return pp.length >= 3 ? pp : null;
+      };
       const keyOf = r => { const pp = r.split(','); return pp[0] + ',' + (pp[1] || '') };
       const seen = new Set(localRules.map(keyOf));
       const okT = new Set(selfGroupNames);
       subNodeNames.forEach(n => okT.add(n)); HS_MANUAL.forEach(n => okT.add(n));
       ['DIRECT', 'REJECT', 'REJECT-DROP', 'PASS', 'COMPATIBLE', 'GLOBAL'].forEach(t => okT.add(t));
-      const subRules = []; let dupN = 0, dropN = 0, rwN = 0;
-      (B.rules || []).forEach(l => {
-        const t = l.trim().replace(/^-\s*/, '').replace(/^['"]|['"]$/g, '').trim();
+      const subRules = []; let dupN = 0, dropN = 0, rwN = 0, keptComplex = 0, rwFusN = 0; /* rwFusN=融合裸名target改写计数(v2.7.0) */
+      (Array.isArray(D.rules) ? D.rules : []).forEach(raw => {
+        let t = String(raw == null ? '' : raw).trim();
         if (!t || t.charAt(0) === '#') return;
-        const pp = t.split(',');
-        if (pp[0] === 'MATCH') return; /* 本地 MATCH 兜底替代(指 🚀 节点选择,调度权在本地) */
+        if (t.split(',')[0] === 'MATCH') return; /* 本地 MATCH 兜底替代(指 🚀 节点选择,调度权在本地) */
+        const pp = parseRule(t);
+        if (!pp) {
+          /* 复杂逻辑规则: 无法安全结构化拆分 → 原文保真透传(去重按整串),不改写不丢弃 */
+          if (seen.has(t)) { dupN++; return }
+          seen.add(t);
+          keptComplex++;
+          subRules.push(t);
+          return;
+        }
         const key = keyOf(t);
         if (seen.has(key)) { dupN++; return }
         let seg = pp.slice(2);
-        if (seg.length && /^no-resolve$/i.test((seg[seg.length - 1] || '').trim())) seg = seg.slice(0, -1);
-        const target = ((seg[seg.length - 1] || '') + '').trim();
+        if (seg.length && /^no-resolve$/i.test(String(seg[seg.length - 1] || '').trim())) seg = seg.slice(0, -1);
+        let target = String((seg[seg.length - 1] || '')).trim();
+        /* v2.7.0 融合审查问题2: 订阅规则 target 直接指向裸节点名时映射为前缀名(与订阅组成员同款处理,
+           否则融合后裸名不在 okT 被静默丢弃);改写后重组 t 供后续 push */
+        if (actMapRef && actMapRef.has(target)) {
+          seg[seg.length - 1] = actMapRef.get(target);
+          target = String(seg[seg.length - 1]).trim();
+          t = pp.slice(0, 2).concat(seg).join(',');
+          rwFusN++;
+        }
         if (!target || !okT.has(target)) { dropN++; return }
         /* 私网/免流段 DIRECT→REJECT 快速失败(2026-09-13 真机: TikTok API 解析出运营商免流 10.105.x.x,
            订阅 IP-CIDR,10/8,DIRECT 在引擎内拨号必超时拖 30s;内核层私网早已 RETURN,这类 DIRECT 只会超时) */
         if (target === 'DIRECT' && (pp[0] === 'IP-CIDR' || pp[0] === 'IP-CIDR6')
           && /^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|127\.|169\.254\.|f[cd]|fe[89ab])/.test(pp[1] || '')) {
-          const noRes = /^no-resolve$/i.test((pp[pp.length - 1] || '').trim());
-          const base = noRes ? pp.slice(0, -1) : pp;
+          const noRes = /^no-resolve$/i.test(String(pp[pp.length - 1] || '').trim());
+          const base = noRes ? pp.slice(0, -1) : pp.slice();
           base[base.length - 1] = 'REJECT';
           rwN++;
           seen.add(key);
@@ -963,32 +1128,33 @@ function genConfigYaml() {
         seen.add(key);
         subRules.push(t);
       });
-      console.log('[小海关] 合并模式: 本地规则 ' + localRules.length + ' + 订阅 ' + subRules.length + '(重复略 ' + dupN + ',目标失效略 ' + dropN + ',私网改REJECT ' + rwN + ';订阅组保留 ' + keptGrp.length + ')');
+      console.log('[小海关] 合并模式: 本地规则 ' + localRules.length + ' + 订阅 ' + subRules.length + '(重复略 ' + dupN + ',目标失效略 ' + dropN + ',私网改REJECT ' + rwN + ',复杂规则保真 ' + keptComplex + (rwFusN ? ',融合裸名改写 ' + rwFusN : '') + ';订阅组保留 ' + keptGrp.length + ')');
       /* ===== 序列化 ===== */
       y += '\n# ===== 合并模式(v' + V + '): 本地骨架+订阅策略,规则本地优先 =====\n';
-      if (subBlocks.anchors && subBlocks.anchors.length) y += subBlocks.anchors.join('\n') + '\n';
-      y += 'proxies:\n' + (B.proxies || []).join('\n').replace(/\n+$/, '') + '\n';
+      /* F05: data 经 merge 展开,序列化后无别名引用——不再拼装锚点定义键(多余顶层键会污染 mihomo 配置) */
+      y += subYaml({ proxies: D.proxies }).replace(/\n+$/, '') + '\n';
+      /* F09-r2: proxy-providers 对象化输出(含线路专属 ln_*_manual 锚定 filter 项);
+         仅输出仍被组 use 引用的 ln_*——静态化后不再 use 的孤儿项不输出(未使用配置不残留) */
+      const usedLn = new Set();
+      groups.forEach(g => { (g.use || []).forEach(u => { if (/^ln_/.test(u)) usedLn.add(u); }); });
+      const ppOut = {};
       if (hasManual) {
-        y += '\n# 手动节点(provider)\nproxy-providers:\n';
-        y += '  manual:\n    type: file\n    path: ' + yamlEsc('./providers/manual.yaml') + '\n';
-        y += '    health-check:\n      enable: true\n      url: ' + yamlEsc('http://www.gstatic.com/generate_204') + '\n      interval: ' + (+C.iv || 300) + '\n      lazy: true\n';
+        ppOut.manual = { type: 'file', path: './providers/manual.yaml', 'health-check': { enable: true, url: 'https://www.gstatic.com/generate_204', interval: +C.iv || 300, lazy: true } };
       }
-      /* rule-providers: 本地 china_ip(chnroute 同源) + 订阅自带条目(china_ip 重名剔除=本地为准) */
+      Object.keys(providers).forEach(k => { if (/^ln_/.test(k) && usedLn.has(k)) ppOut[k] = providers[k]; });
+      if (Object.keys(ppOut).length) {
+        y += '\n# 手动节点与线路手选池(provider)\n' + subYaml({ 'proxy-providers': ppOut }).replace(/\n+$/, '') + '\n';
+      }
+      /* rule-providers: 本地 china_ip(chnroute 同源) + 订阅自带条目(china_ip 重名剔除=本地为准);对象化合并后由库序列化 */
       const wantChn = ST.chn > 0;
-      let subRp = ((B['rule-providers'] || []).join('\n') || '').replace(/\n+$/, '');
-      if (subRp && wantChn) subRp = subRp.replace(/^\s{2}china_ip:\n(?:[ \t]{4}.*\n?)*/gm, '').replace(/^\s{2}china_ip:.*\n?/gm, '');
-      /* 同缩进归一: 订阅 rule-providers 条目剥到与本地 china_ip 一致的 2 空格 */
-      /* v1.8.5 修: 归一目标=2 空格(与本地 china_ip 对齐),按首行实际缩进计算剥除量——
-         此前硬编码剥 2:4 空格订阅正好归一,2 空格订阅会被剥成 0 空格掉出 rule-providers 块(2026-09-13 审查 P1) */
-      if (subRp) {
-        const rpLead = (subRp.match(/^[ \t]*/) || [''])[0].length;
-        const rpCut = Math.max(0, rpLead - 2);
-        if (rpCut) subRp = subRp.split('\n').map(l => (l.length >= rpCut && l.slice(0, rpCut).trim() === '') ? l.slice(rpCut) : l).join('\n');
-      }
-      if (wantChn || subRp) {
-        y += '\nrule-providers:\n';
-        if (wantChn) y += '  china_ip:\n    type: file\n    behavior: ipcidr\n    format: text\n    path: ' + yamlEsc('./rules/china_ip.txt') + '\n    interval: 0\n';
-        if (subRp) y += subRp + '\n';
+      const subRpSrc = (D['rule-providers'] && typeof D['rule-providers'] === 'object' && !Array.isArray(D['rule-providers'])) ? D['rule-providers'] : {};
+      const subRpObj = {};
+      Object.keys(subRpSrc).forEach(k => { if (!(wantChn && k === 'china_ip')) subRpObj[k] = subRpSrc[k] });
+      if (wantChn || Object.keys(subRpObj).length) {
+        const rpOut = {};
+        if (wantChn) rpOut.china_ip = { type: 'file', behavior: 'ipcidr', format: 'text', path: './rules/china_ip.txt', interval: 0 };
+        Object.assign(rpOut, subRpObj);
+        y += '\n' + subYaml({ 'rule-providers': rpOut }).replace(/\n+$/, '') + '\n';
       }
       /* 组: 本地组链(静态化后) + 订阅组原文 */
       y += '\nproxy-groups:\n';
@@ -1002,9 +1168,13 @@ function genConfigYaml() {
         if (g.tolerance) { y += '    tolerance: ' + g.tolerance + '\n' }
         if (g.lazy !== undefined) { y += '    lazy: ' + g.lazy + '\n' }
         if (g.strategy) { y += '    strategy: ' + g.strategy + '\n' }
-        if (g.default) { y += '    default: ' + yamlEsc(g.default) + '\n' }
+        if (g.default) { y += '    default-selected: ' + yamlEsc(g.default) + '\n' } /* F07: selector 实际消费 default-selected(default 被内核忽略) */
       });
-      keptGrp.forEach(g => { y += '\n' + g + '\n' });
+      keptGrp.forEach(g => { y += '\n' + subYaml([g]).replace(/\n+$/, '').split('\n').map(l => '  ' + l).join('\n') + '\n' });
+      /* sub-rules 透传: 订阅 SUB-RULE 逻辑规则的配套定义段(直通经 yaml 字段整体保真;合并在此透传) */
+      if (D['sub-rules'] && typeof D['sub-rules'] === 'object') {
+        y += '\n' + subYaml({ 'sub-rules': D['sub-rules'] }).replace(/\n+$/, '') + '\n';
+      }
       /* 规则: 本地(含线路 SRC) → 订阅分类(去重) → MATCH 本地主组 */
       y += '\nrules:\n';
       localRules.concat(subRules).concat(['MATCH,🚀 节点选择']).forEach(r => { y += '  - ' + yamlEsc(r) + '\n' });
@@ -1053,7 +1223,7 @@ function genConfigYaml() {
       if (g.tolerance) { y += '    tolerance: ' + g.tolerance + '\n' }
       if (g.lazy !== undefined) { y += '    lazy: ' + g.lazy + '\n' }
       if (g.strategy) { y += '    strategy: ' + g.strategy + '\n' }
-      if (g.default) { y += '    default: ' + yamlEsc(g.default) + '\n' }
+      if (g.default) { y += '    default-selected: ' + yamlEsc(g.default) + '\n' } /* F07: selector 消费字段 */
     });
   }
 
@@ -1064,19 +1234,83 @@ function genConfigYaml() {
 async function downloadSub(i) {
   const sub = C.subs[i]; if (!sub) return false;
   const pf = DIR + '/providers/sub' + i + '.yaml';
-  await run('mkdir -p ' + shq(DIR + '/providers'), 5000);
-  /* UA 必须报 clash 身份: 机场按 UA 分发格式,裸 curl 拿到的是 base64 分享链接(无 proxy-groups/rules,直通判定必回退);自建调度走 mihomo 内核自拉 provider(自带 UA)不受影响 */
-  const r = await run('curl -sL -A clash.meta/v1.19.4 --connect-timeout 10 -m 30 -o ' + shq(pf) + ' ' + shq(sub.url) + ' && wc -c < ' + shq(pf), 40000);
-  const sz = parseInt(ct(r)) || 0;
-  if (sz < 100) { toast('❌ 订阅下载失败(' + sz + 'B,可能 URL 无效或网络不通)', 'red'); return false }
+  const cand = pf + '.part'; /* F06: 独立候选文件——任何失败不触碰现用文件(防错误页/截断覆盖旧订阅) */
+  await run('mkdir -p ' + shq(DIR + '/providers') + '; rm -f ' + shq(cand), 5000);
+  /* UA 必须报 clash 身份: 机场按 UA 分发格式,裸 curl 拿到的是 base64 分享链接(无 proxy-groups/rules,直通判定必回退);自建调度走 mihomo 内核自拉 provider(自带 UA)不受影响。
+     成功四重门: exit 0 + HTTP 2xx + 尺寸下限 + 真实解析通过(extractSubBlocks);全部通过才 mv 原子替换 */
+  /* v2.7.4 订阅元信息主数据源=HTTP 响应头 subscription-userinfo(Clash Verge 同源方案,
+     用户实证: Verge 能显示而解析订阅文本不可靠): upload/download/total=字节 expire=Unix秒;
+     -D dump 头到临时文件,下载成功后解析存 sub.ui 持久化(不依赖订阅内容形态) */
+  const hdrF = cand + '.hdr';
+  const r = await run('curl -sL -A clash.meta/v1.19.4 --connect-timeout 10 -m 30 -D ' + shq(hdrF) + ' -o ' + shq(cand) + ' -w \'%{http_code}\' ' + shq(sub.url) + '; echo " RC=$?"; wc -c < ' + shq(cand) + ' 2>/dev/null || echo 0', 40000);
+  const m = String(r.content || '').match(/(\d{3})\s+RC=(\d+)\s+(\d+)/);
+  const http = m ? m[1] : '?'; const rc = m ? m[2] : '?';
+  const sz = m ? parseInt(m[3], 10) || 0 : 0;
+  const fail = async why => {
+    await run('rm -f ' + shq(cand), 5000);
+    toast('❌ 订阅下载失败(' + why + ')', 'red');
+    await opLog('订阅下载失败(' + why + '),已保留旧订阅');
+    return false;
+  };
+  if (rc !== '0') return fail('curl退出' + rc + ',HTTP ' + http);
+  if (!/^2/.test(http)) return fail('HTTP ' + http);
+  if (sz < 100) return fail('仅 ' + sz + 'B');
+  const raw = await readFile(cand);
+  const parsed = raw ? extractSubBlocks(raw) : null;
+  if (!parsed || !parsed.ok) return fail('内容无效:' + (parsed && parsed.why ? parsed.why.slice(0, 60) : '读取失败'));
+  /* v2.7.15 节点数精确计数(过滤前): 解析已在手,零开销;替代 shell grep 计数(BusyBox 正则兼容性不稳) */
+  sub.nodes = Array.isArray(parsed.data.proxies) ? parsed.data.proxies.length : 0;
+  await run('mv -f ' + shq(cand) + ' ' + shq(pf), 5000); /* 同目录 mv 原子替换 */
+  /* subscription-userinfo 头解析: upload=0; download=...; total=...; expire=Unix秒 */
+  try {
+    const hdrTxt = await readFile(hdrF);
+    const mu = /subscription-userinfo\s*:\s*([^\r\n]+)/i.exec(String(hdrTxt || ''));
+    if (mu) {
+      const kv = {};
+      mu[1].trim().split(';').forEach(p => { const eq = p.indexOf('='); if (eq > 0) { const k = p.slice(0, eq).trim(); const v = parseInt(p.slice(eq + 1).trim(), 10); if (k && !isNaN(v)) kv[k] = v } });
+      sub.ui = { up: kv.upload || 0, dl: kv.download || 0, total: kv.total || 0, expire: kv.expire || 0, forever: false };
+    } else sub.ui = null; /* 本次无头→清旧值(机场可能停发) */
+  } catch (e) { /* 头解析失败不影响下载结果 */ }
+  /* v2.7.15 到期文本补抓(头无 expire 时): 全文已在手,JS 正则抓「套餐到期/到期时间/长期/永久」
+     (shell grep 在 BusyBox 上不稳——节点计数同因失败,改为解析后统一 JS 处理) */
+  if (!sub.ui || !sub.ui.expire) {
+    let rawTxt = String(raw || '');
+    try { const dec = decodeURIComponent(rawTxt); if (dec !== rawTxt) rawTxt += '\n' + dec } catch (e) { }
+    const mExp = /(?:套餐到期|到期时间|expire)[：:]\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i.exec(rawTxt);
+    if (/长期|永久/.test(rawTxt)) {
+      sub.ui = Object.assign({ up: 0, dl: 0, total: 0, expire: 0 }, sub.ui || {}, { forever: true });
+    } else if (mExp) {
+      const ts = new Date(mExp[1] + 'T23:59:59');
+      if (!isNaN(ts)) sub.ui = Object.assign({ up: 0, dl: 0, total: 0 }, sub.ui || {}, { expire: Math.floor(ts.getTime() / 1000), forever: false });
+    }
+  }
+  if (sub.ui) console.log('[小海关] 订阅「' + sub.name + '」: ' + (sub.ui.total ? '已用 ' + humanGB((sub.ui.up + sub.ui.dl) / 1073741824) + ' / ' + humanGB(sub.ui.total / 1073741824) : '无流量信息') + (sub.ui.forever ? ', 长期有效' : sub.ui.expire ? ', 到期 ' + new Date(sub.ui.expire * 1000).toISOString().slice(0, 10) : ''));
+  await run('rm -f ' + shq(hdrF), 5000);
   sub.time = nowStr().slice(0, 16);
-  HS_SUBINFO = undefined; HS_SUB_RAW = ''; HS_SUB_RAW_KEY = ''; /* 失效缓存强制重读 */
+  HS_SUBINFO_ALL = undefined; HS_SUB_RAW = ''; HS_SUB_RAW_KEY = ''; HS_SUB_RAW_ALL = null; /* 失效缓存强制重读(含融合全订阅缓存+订阅信息,审查问题3) */
   await saveConf();
-  if (C.policySrc !== 'self') await refreshSubRaw();
+  if (C.policySrc !== 'self') await refreshSubRaw(); /* 仅替换成功后才刷新缓存 */
   return true;
 }
 async function writeConfigAndValidate() {
-  const yaml = genConfigYaml();
+  /* v2.7.25 修复: 融合节点丢失根因——启动链(applyWithTxn/bootPreflight)直达此处时
+     HS_SUB_RAW_ALL 可能仍为 null(只有 saveConfReload 会预载),融合段静默跳过→
+     配置只剩基准订阅节点(用户实锢: 节点列表只见基准)。幂等预热,缓存命中零开销 */
+  await refreshSubRaw();
+  /* F05: 订阅解析失败时 genConfigYaml 返回 null——中止应用,旧 config.yaml 不动(废除静默回退自建) */
+  let yaml;
+  try { yaml = genConfigYaml() } catch (e) {
+    HS_LAST_ERR = '配置生成失败:' + String((e && e.message) || e).slice(0, 120);
+    toast('❌ ' + HS_LAST_ERR, 'red');
+    await opLog(HS_LAST_ERR + '(旧配置保留)');
+    return false;
+  }
+  if (yaml === null) {
+    HS_LAST_ERR = '订阅解析失败,本次不应用(旧配置保留)';
+    toast('❌ ' + HS_LAST_ERR, 'red');
+    await opLog(HS_LAST_ERR);
+    return false;
+  }
   const w = await writeFile(CFG, yaml);
   if (!w) { HS_LAST_ERR = '配置文件写入失败(磁盘空间/权限?)'; toast('配置文件写入失败', 'red'); return false }
   if (!ST.bin) return true; /* 内核未装时跳过验证 */
@@ -1100,46 +1334,8 @@ async function writeConfigAndValidate() {
    ③接管挂载兜底——JS 不在场的开机自启场景,等 ctrl 端口就绪(最多20s,就绪前挂=黑洞窗口)后
    fw.sh apply;fw_apply 首行自带 fw_clean,与 JS 侧双挂幂等;整段后台不阻塞返回 */
 function genStartSh() {
-  const out = C.logEnabled ? LOGF : '/dev/null';
-  /* 接管烙印: 生成时把"是否挂接管"烧进脚本(开机自启时 JS 不在场,规则挂载由 start.sh 兜底;
-     s1/s2 切换经 reapplyFw 会连本脚本一起重写,烙印随配置走) */
-  const takeover = (C.s1 !== 'off' || C.s2) ? '1' : '0';
-  return '#!/bin/sh\n'
-    + '#gen:v' + V + '\n'
-    + 'D=' + DIR + '\n'
-    + '[ -x $D/mihomo ] || exit 1\n'
-    /* v1.8.5: 单实例守卫——双启动时第二个实例端口占用退出,其退出钩子(fw.sh clean)会摘掉在跑实例的规则
-       =引擎在跑但全直连(2026-09-13 审查 P2) */
-    + 'HS_P=$(pidof mihomo 2>/dev/null); [ -n "$HS_P" ] && { echo "already running: $HS_P"; exit 0; }\n'
-    + 'HS_HEAD_OK=0\n'
-    + 'for HS_I in 1 2 3; do\n'
-    + '  HS_CODE=$(curl -s -m 8 -o /tmp/.hs_head -w "%{http_code}" http://127.0.0.1:2333/api/get_custom_head 2>/dev/null)\n'
-    + '  [ "$HS_CODE" = "200" ] && { HS_HEAD_OK=1; break; }\n'
-    + '  sleep 8\n'
-    + 'done\n'
-    + 'if [ "$HS_HEAD_OK" = "1" ] && ! grep -q "__customs_loaded" /tmp/.hs_head 2>/dev/null; then\n'
-    + '  sh $D/fw.sh clean >/dev/null 2>&1\n'
-    + "  sed -i '\\|# plugins/customs|d' " + BOOT_SH + " 2>/dev/null\n"
-    + '  for P in $(pidof mihomo); do kill $P 2>/dev/null; done\n'
-    + '  sleep 1\n'
-    + '  for P in $(pidof mihomo); do kill -9 $P 2>/dev/null; done\n'
-    + '  rm -rf $D /tmp/.hs_head\n'
-    + '  exit 0\n'
-    + 'fi\n'
-    + 'rm -f /tmp/.hs_head\n'
-    + '[ -f $D/customs.log ] && [ "$(wc -c < $D/customs.log)" -ge 262144 ] && : > $D/customs.log\n'
-    + 'export GOMEMLIMIT=' + (C.lowMem ? '48MiB' : '128MiB') + '\n'
-    + 'nohup sh -c \'' + DIR + '/mihomo -d ' + DIR + '; sh ' + DIR + '/fw.sh clean >/dev/null 2>&1\' > ' + out + ' 2>&1 &\n'
-    + 'HS_TAKEOVER=' + takeover + '\n'
-    + '(\n'
-    + '  HS_OK=0\n'
-    + '  for HS_W in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do\n'
-    + '    curl -s -m 2 -o /dev/null http://127.0.0.1:' + C.ports.ctrl + '/version 2>/dev/null && { HS_OK=1; break; }\n'
-    + '    sleep 1\n'
-    + '  done\n'
-    + '  [ "$HS_OK" = "1" ] && [ "$HS_TAKEOVER" = "1" ] && sh $D/fw.sh apply >/dev/null 2>&1\n'
-    + '  [ "$HS_OK" = "0" ] && [ "$HS_TAKEOVER" = "1" ] && echo "$(date)\u5f15\u64ce\u672a\u5c31\u7eea,\u8df3\u8fc7\u89c4\u5219\u6302\u8f7d(\u9632\u9ed1\u6d1e)" >> $D/customs.log\n'
-    + ') &\n';
+  /* F14: 传 secret——start.sh 探活需鉴权头(与 config.yaml 同源无新增泄露面);start.sh 权限收紧 700 */
+  return generateStartScript(C, { V, DIR, LOGF, BOOT_SH, secret: C.secret });
 }
 /* ---- fw.sh 生成(透明接管;注释不落盘,知识在此) ----
    结构:fw_clean 完全对称删除(三种挂法/双栈/ip rule+table 100/ipset 拆集合) → fw_apply 先 clean 再建。
@@ -1151,39 +1347,98 @@ function genStartSh() {
 /* EasyTier 共存: 读 ET 1.5.0 输出的 state.json(tun/网段/打洞端口),供 genFwSh 生成防火墙排除 */
 let ET_CACHE = null;
 let ET_ERR = '';
+let ET_ERR_LOGGED = ''; /* v2.7.21: 同一错误只记一次,成功复位(用户日志实锄 9 连刷) */
+let HS_ET_SIG = ''; /* 审查 P1-1: ET 组网签名——上次 applyFw 消费时的快照,变化即重应用(仅 coexistAuto) */
+/* ET 组网签名: cidrs/v6/p2p_ports 排序拼接(与 fw 消费面同源字段);空/未安装=空串 */
+function etSig() {
+  if (!C.coexistAuto || !ET_CACHE || !ET_CACHE.active) return '';
+  return (ET_CACHE.cidrs || []).slice().sort().join(',') + '|' + (ET_CACHE.cidrs6 || []).slice().sort().join(',')
+    + '|' + (ET_CACHE.p2p_ports || []).slice().sort((a, b) => a - b).join(',')
+    + '|' + (ET_CACHE.infra_ips || []).slice().sort().join(','); /* v2.7.21: 外联端点变化也触发 fw 更新 */
+}
+/* 审查 P1-1: ET peer/网段变化跟随——applyFw 时记录签名,collectStatus 尾部比对,
+   变化即 reapplyFw(fw 排除面同步);与 syncLineRules 同防抖形态,失败下次采集重试 */
+async function syncEtRules() {
+  if (HS_UPGRADING) return;
+  if (!C.coexistAuto || !ST.running) return; /* 引擎未接管时无需 fw 同步 */
+  try {
+    await readEtState(); /* 刷新 ET_CACHE(含 state.json+监听口补采) */
+    const sig = etSig();
+    if (!sig || sig === HS_ET_SIG) return;
+    if (!HS_ET_SIG && !ET_CACHE) return; /* ET 未安装/未活跃: 首次空基线不动作 */
+    const prev = HS_ET_SIG; HS_ET_SIG = sig;
+    await reapplyFw(); /* fw 排除面同步(含 fw 重生成+挂载) */
+    await opLog('ET组网变化,已自动更新排除规则');
+  } catch (e) { /* 静默重试: 下次 collectStatus 再比 */ }
+}
 async function readEtState() {
   ET_CACHE = null; ET_ERR = '';
   if (!C.coexistAuto) return;
-  try {
+  const parseOnce = async () => {
     /* 与 readFile 同款 base64 通道(项目内已验证可靠);直接 cat 的原始输出经面板传输可能被改写 */
     const r = await run('base64 < /data/plugins/easytier/state.json 2>/dev/null', 5000);
-    if (!r) { ET_ERR = 'run 无返回'; return }
-    if (r.success === false) ET_ERR = '面板执行失败:' + String(r.content || '').slice(0, 40);
+    if (!r) { ET_ERR = 'run 无返回'; return false }
+    if (r.success === false) { ET_ERR = '面板执行失败:' + String(r.content || '').slice(0, 40); return false }
     const txt = b64d(String(r.content || '').replace(/\s+/g, ''));
-    if (!txt) { ET_ERR = 'base64 解码为空, 原始:' + String(r.content || '').slice(0, 40); return }
-    const j = JSON.parse(txt.trim());
-    if (j && j.version === 1) {
+    if (!txt) { ET_ERR = 'base64 解码为空, 原始:' + String(r.content || '').slice(0, 40); return false }
+    try {
+      const j = JSON.parse(txt.trim());
+      if (!(j && j.version === 1)) { ET_ERR = 'state.json 版本/内容不符:' + String(r.content || '').slice(0, 40); return false }
       ET_CACHE = j;
-      /* v1.8.5 安全: state.json 内容零信任——cidrs 逐条过 CIDR 白名单(v4 与 v6 分桶),
-         p2p_ports 强制 1..65535 整数;这些值会拼进 root 执行的 fw.sh,未过滤=命令注入面(2026-09-13 审查 P1) */
-      const rawC = Array.isArray(j.cidrs) ? j.cidrs : [];
-      ET_CACHE.cidrs = rawC.filter(c => typeof c === 'string' && okCidr(c.trim()));
-      ET_CACHE.cidrs6 = rawC.filter(c => typeof c === 'string' && okV6(c.trim()));
-      ET_CACHE.p2p_ports = (Array.isArray(j.p2p_ports) ? j.p2p_ports : [])
-        .map(x => parseInt(x, 10)).filter(n => n >= 1 && n <= 65535);
-      /* 监听口从 ET 配置实时补采(listeners 的 :PORT): 排除用=监听口+打洞口并集,源/目标双向 */
-      try {
-        const lr = await run("grep -hoE ':[0-9]+' /data/plugins/easytier/configs/*.toml 2>/dev/null | tr -d : | sort -un", 5000);
-        (lr.content || '').split(/\s+/).forEach(p => { const n = parseInt(p); if (n > 0 && ET_CACHE.p2p_ports.indexOf(n) < 0) ET_CACHE.p2p_ports.push(n) });
-      } catch (e) { }
+      return true;
+    } catch (e) {
+      /* v2.7.21 降级抽取: ET 事件驱动覆写非原子(文档明示),撞上写入瞬间会读到半文件;
+         正则抽取前部完整字段——active/cidrs/p2p_ports 在文件前部,大概率可救回 */
+      const rxBool = k => { const m = new RegExp('"' + k + '"\\s*:\\s*(true|false)').exec(txt); return m ? m[1] === 'true' : null };
+      const rxArr = k => { const m = new RegExp('"' + k + '"\\s*:\\s*\\[([^\\]]*)\\]').exec(txt); return m ? m[1].split(',').map(s => s.replace(/["'\s]/g, '')).filter(Boolean) : null };
+      const act = rxBool('active');
+      if (act === null) { ET_ERR = '异常:' + String((e && e.message) || e).slice(0, 60); return false }
+      ET_CACHE = { version: 1, active: act, cidrs: rxArr('cidrs') || [], p2p_ports: rxArr('p2p_ports') || [], infra_endpoints: rxArr('infra_endpoints') || [], degraded: true };
+      console.warn('[小海关] ET state.json 半文件降级抽取成功(active=' + act + ')');
+      return true;
     }
-    else if (!ET_ERR) ET_ERR = 'state.json 版本/内容不符:' + String(r.content || '').slice(0, 40);
-  } catch (e) { ET_ERR = '异常:' + String((e && e.message) || e).slice(0, 60) }
+  };
+  let ok = await parseOnce();
+  if (!ok) { await wait(350); ok = await parseOnce() } /* 写入瞬间撞车→等半秒重读一次(用户日志实锄连续失败场景) */
+  if (!ok || !ET_CACHE) return;
+  const j = ET_CACHE;
+  /* v1.8.5 安全: state.json 内容零信任——cidrs 逐条过 CIDR 白名单(v4 与 v6 分桶),
+     p2p_ports 强制 1..65535 整数;这些值会拼进 root 执行的 fw.sh,未过滤=命令注入面(2026-09-13 审查 P1) */
+  const rawC = Array.isArray(j.cidrs) ? j.cidrs : [];
+  ET_CACHE.cidrs = rawC.filter(c => typeof c === 'string' && okCidr(c.trim()));
+  ET_CACHE.cidrs6 = rawC.filter(c => typeof c === 'string' && okV6(c.trim()));
+  ET_CACHE.p2p_ports = (Array.isArray(j.p2p_ports) ? j.p2p_ports : [])
+    .map(x => parseInt(x, 10)).filter(n => n >= 1 && n <= 65535);
+  /* v2.7.21 新字段消费(字段探测式,旧版 ET 无此字段=空数组): infra_endpoints=内核当前
+     真实外联端点 IP:port(配置服务器/moon/对端)——提取 IP 进直连排除面,保 ET 打洞不被代理干扰 */
+  ET_CACHE.infra_ips = Array.from(new Set((Array.isArray(j.infra_endpoints) ? j.infra_endpoints : [])
+    .map(e => String(e || '').split(':')[0])
+    .filter(ip => /^\d+\.\d+\.\d+\.\d+$/.test(ip)))).slice(0, 16);
+  /* 监听口从 ET 配置实时补采(listeners 的 :PORT): 排除用=监听口+打洞口并集,源/目标双向 */
+  try {
+    const lr = await run("grep -hoE ':[0-9]+' /data/plugins/easytier/configs/*.toml 2>/dev/null | tr -d : | sort -un", 5000);
+    (lr.content || '').split(/\s+/).forEach(p => { const n = parseInt(p); if (n > 0 && ET_CACHE.p2p_ports.indexOf(n) < 0) ET_CACHE.p2p_ports.push(n) });
+  } catch (e) { }
 }
 function genFwSh() {
   const P = C.ports;
   const ips = C.s1 === 'white' ? C.devices.filter(d => d.proxy).map(d => d.ip) : [];
   const allMode = C.s1 === 'all';
+  /* 方案A: 线路→专属链同源清单(与 genConfigYaml 线路组块同条件同序:id/name 校验+重名跳过);
+     设备身份=MAC——每线路 MAC 集 hs_wl_<id> → 线路链 → 线路 listener 端口(与 listeners 段同派生式) */
+  const LN_FW = [];
+  {
+    const seenFwLn = {};
+    (C.lines || []).forEach(L => {
+      if (!L || !L.id || !L.name || !/^[A-Za-z0-9_-]{1,16}$/.test(L.id)) return;
+      const nm = String(L.name);
+      if (seenFwLn[nm]) return; seenFwLn[nm] = 1;
+      const i = LN_FW.length;
+      const macs = (C.devices || []).filter(d => d.line === L.id && d.proxy !== false)
+        .map(d => String(d.mac || '').trim().toLowerCase()).filter(m => okMac(m));
+      LN_FW.push({ id: L.id, macs, lr: P.redir + 1000 + 2 * i, lt: P.tproxy + 1000 + 2 * i });
+    });
+  }
   const sh = [
     '#!/bin/sh',
     '#gen:v' + V,
@@ -1203,17 +1458,26 @@ function genFwSh() {
     'ETNETS="' + ((ET_CACHE && ET_CACHE.active && ET_CACHE.cidrs) ? ET_CACHE.cidrs.join(' ') : '') + '"',
     'ETNETS6="' + ((ET_CACHE && ET_CACHE.active && ET_CACHE.cidrs6) ? ET_CACHE.cidrs6.join(' ') : '') + '"',
     'ETPORTS="' + ((ET_CACHE && ET_CACHE.active && ET_CACHE.p2p_ports) ? ET_CACHE.p2p_ports.join(' ') : '') + '"',
+    'ETIPS="' + ((ET_CACHE && ET_CACHE.active && ET_CACHE.infra_ips) ? ET_CACHE.infra_ips.join(' ') : '') + '"', /* v2.7.21: ET 真实外联端点 IP 直连放行 */
+    'ETTUN="' + ((ET_CACHE && ET_CACHE.active && ET_CACHE.tun) ? ET_CACHE.tun : '') + '"', /* v2.7.28: tun 接口维度兑底(网段未刷新时不漏) */
+    'ETCS="' + ((ET_CACHE && ET_CACHE.active && ET_CACHE.config_server) ? (String(ET_CACHE.config_server).replace(/^[a-z]+:\/\//i, '').split('/')[0].split(':')[0]) : '') + '"', /* v2.7.28: 配置服务器域名(fw 内动态解析为 IP;去掉协议与端口) */
     'IPS="' + ips.filter(ip => okCidr(ip) || okV6(ip)).join(' ') + '"', /* 消费端复滤与 WMACS/EXCIDRS 齐平(v2.0.8 纵深防御;上游 collectDevices/sanitizeConf 已校验,合法值恒通过零行为变化) */
     'WMACS="' + C.devices.filter(d => d.proxy && okMac(d.mac)).map(d => String(d.mac).trim().toLowerCase()).join(' ') + '"',
     'EXCIDRS="' + ((C.exclude || []).filter(x => x && x.m === 'cidr' && okCidr(x.v)).map(x => String(x.v).trim()).join(' ')) + '"',
+    /* F04: 用户强制清单 CIDR 形态——fw 层前置直送引擎,防 hs_cn RETURN 提前放行致引擎内 IP-CIDR 强制规则永不命中;
+       域名形态强制经 fake-IP 天然不被 hs_cn 命中,不进 fw 层 */
+    'FCIDRS="' + ((C.force || []).filter(x => x && x.m === 'cidr' && okCidr(x.v)).map(x => String(x.v).trim()).join(' ')) + '"',
     '',
     '# 并发锁:start.sh 后台探活 apply 与 JS 侧 apply 可能竞态(实锤:链规则重复两套),flock 串行化',
     'exec 9>/tmp/.hs_fw.lock',
     'flock -n 9 || { echo "WARN: fw 并发调用,本次跳过(另一实例处理中)"; exit 0; }',
     '',
     'fw_clean() {',
-    '  while iptables -t nat -D PREROUTING -j HS_LAN 2>/dev/null; do :; done',
+    '  while iptables -t nat -D PREROUTING -i br-lan -j HS_LAN 2>/dev/null; do :; done',
+    '  while iptables -t nat -D PREROUTING -i br-lan -j HS_DNS 2>/dev/null; do :; done',
+    '  while iptables -t nat -D PREROUTING -j HS_LAN 2>/dev/null; do :; done', /* 紧修兼容: 同旹清旧版无接口限定残留(升级过渡) */
     '  while iptables -t nat -D PREROUTING -j HS_DNS 2>/dev/null; do :; done',
+      '  while iptables -t mangle -D PREROUTING -i br-lan -j HS_UDP 2>/dev/null; do :; done',
       '  while iptables -t mangle -D PREROUTING -j HS_UDP 2>/dev/null; do :; done',
     '  while iptables -t nat -D OUTPUT -j HS_OUT 2>/dev/null; do :; done',
     /* v1.8.4 规格无关清扫: 上面的 while 只删得掉"当前参数"生成的规则,历史代次(旧 WMACS/旧模式)的
@@ -1230,7 +1494,9 @@ function genFwSh() {
     '  iptables -t mangle -F HS_UDP 2>/dev/null; iptables -t mangle -X HS_UDP 2>/dev/null',
     '  ip rule del fwmark $MARK lookup $TABLE 2>/dev/null',
     '  ip route flush table $TABLE 2>/dev/null',
-  '  while ip6tables -t nat -D PREROUTING -j HS_V6_LAN 2>/dev/null; do :; done',
+  '  while ip6tables -t nat -D PREROUTING -i br-lan -j HS_V6_LAN 2>/dev/null; do :; done',
+  '  while ip6tables -t nat -D PREROUTING -i br-lan -j HS_V6_DNS 2>/dev/null; do :; done',
+  '  while ip6tables -t nat -D PREROUTING -j HS_V6_LAN 2>/dev/null; do :; done', /* 紧修兼容: 同旹清旧版无接口限定残留 */
   '  while ip6tables -t nat -D PREROUTING -j HS_V6_DNS 2>/dev/null; do :; done',
   '  while ip6tables -t nat -D PREROUTING -m set --match-set hs_wmac src -j HS_V6_LAN 2>/dev/null; do :; done',
   '  while ip6tables -t nat -D PREROUTING -m set --match-set hs_wmac src -j HS_V6_DNS 2>/dev/null; do :; done',
@@ -1244,6 +1510,7 @@ function genFwSh() {
   '    while ip6tables -t nat -D PREROUTING -m mac --mac-source $MAC -j HS_V6_LAN 2>/dev/null; do :; done',
   '    while ip6tables -t nat -D PREROUTING -m mac --mac-source $MAC -j HS_V6_DNS 2>/dev/null; do :; done',
   '  done',
+  '  while ip6tables -t mangle -D PREROUTING -i br-lan -j HS_V6_UDP 2>/dev/null; do :; done',
   '  while ip6tables -t mangle -D PREROUTING -j HS_V6_UDP 2>/dev/null; do :; done',
     '  while ip6tables -t mangle -D PREROUTING -m set --match-set hs_wmac src -j HS_V6_UDP 2>/dev/null; do :; done',
     '  for MAC in $WMACS; do',
@@ -1258,6 +1525,28 @@ function genFwSh() {
   '  ipset destroy hs_cn 2>/dev/null',
   '  ipset destroy hs_cn6 2>/dev/null',
   '  ipset destroy hs_wmac 2>/dev/null',
+    /* 方案A热修: 孤儿清理——枚举现存 hs_wl_ 前缀集合与 HS_LAN_/HS_UDP_ 前缀链,与当前线路清单(WL_KEEP)比对,
+       销毁已删线路残留(复核实测:删线后旧集合/链残留 12 条→死端口黑洞);apply 前的 fw_clean 也经此,重 apply 自带收敛 */
+    '  WL_KEEP="' + LN_FW.map(w => w.id).join(' ') + '"',
+    '  for S in $(ipset list -n 2>/dev/null | grep "^hs_wl_"); do',
+    '    case " $WL_KEEP " in *" ${S#hs_wl_} "*) ;; *)',
+    '      while iptables -t nat -D PREROUTING -m set --match-set $S src -j HS_DNS 2>/dev/null; do :; done',
+    '      while iptables -t nat -D PREROUTING -m set --match-set $S src -j HS_LAN_${S#hs_wl_} 2>/dev/null; do :; done',
+    '      while iptables -t mangle -D PREROUTING -m set --match-set $S src -j HS_UDP_${S#hs_wl_} 2>/dev/null; do :; done',
+    '      iptables -t nat -F HS_LAN_${S#hs_wl_} 2>/dev/null; iptables -t nat -X HS_LAN_${S#hs_wl_} 2>/dev/null',
+    '      iptables -t mangle -F HS_UDP_${S#hs_wl_} 2>/dev/null; iptables -t mangle -X HS_UDP_${S#hs_wl_} 2>/dev/null',
+    '      ipset destroy $S 2>/dev/null',
+    '      ;; esac',
+    '  done',
+    /* 方案A: 线路链/集合清理对称 */
+    ...LN_FW.flatMap(w => [
+      '  while iptables -t nat -D PREROUTING -m set --match-set hs_wl_' + w.id + ' src -j HS_LAN_' + w.id + ' 2>/dev/null; do :; done',
+      '  while iptables -t nat -D PREROUTING -m set --match-set hs_wl_' + w.id + ' src -j HS_DNS 2>/dev/null; do :; done',
+      '  while iptables -t mangle -D PREROUTING -m set --match-set hs_wl_' + w.id + ' src -j HS_UDP_' + w.id + ' 2>/dev/null; do :; done',
+      '  iptables -t nat -F HS_LAN_' + w.id + ' 2>/dev/null; iptables -t nat -X HS_LAN_' + w.id + ' 2>/dev/null',
+      '  iptables -t mangle -F HS_UDP_' + w.id + ' 2>/dev/null; iptables -t mangle -X HS_UDP_' + w.id + ' 2>/dev/null',
+      '  ipset destroy hs_wl_' + w.id + ' 2>/dev/null',
+    ]),
   '  rm -f $D/.tpmode 2>/dev/null',
   '  echo cleaned',
   '  iptables -t nat -nL HS_LAN >/dev/null 2>&1 && echo "WARN: HS_LAN 清理未净(残留规则风险)"',
@@ -1296,6 +1585,8 @@ function genFwSh() {
     '    modprobe xt_set 2>/dev/null',
     '    iptables -t nat -I HS_LAN 1 -m set --match-set hs_cn dst -j RETURN',
     '    iptables -t mangle -I HS_UDP 1 -m set --match-set hs_cn dst -j RETURN',
+    /* F04: 强制 CIDR 前置直送(后插压顶=序在 hs_cn RETURN 之上);TCP nat 直 REDIRECT;UDP 在 TPROXY_MODE 判定后补插 */
+    '    for NET in $FCIDRS; do iptables -t nat -I HS_LAN 1 -d $NET -p tcp -j REDIRECT --to-ports $REDIR; done',
     '    iptables -t nat -S HS_LAN 2>/dev/null | grep -q "match-set hs_cn" || echo "WARN: v4国内直通规则未挂载"',
     '  fi',
     '  if [ "$CNBP" = "1" ]; then',
@@ -1333,6 +1624,19 @@ function genFwSh() {
     '    iptables -t nat -I HS_LAN 1 -d $NET -j RETURN',
     '    iptables -t mangle -I HS_UDP 1 -d $NET -j RETURN',
     '  done',
+    '  for IP in $ETIPS; do',
+    '    iptables -t nat -I HS_LAN 1 -d $IP -j RETURN',
+    '    iptables -t mangle -I HS_UDP 1 -d $IP -j RETURN',
+    '  done',
+    '  if [ -n "$ETTUN" ]; then', /* v2.7.29: 仅 -i 可用(PREROUTING 无 -o——v2.7.28 静默失败教训): 隧道回程流量 */
+    '    iptables -t mangle -I HS_UDP 1 -i $ETTUN -j RETURN 2>/dev/null',
+    '  fi',
+    '  if [ -z "$ETIPS" ] && [ -n "$ETCS" ]; then', /* v2.7.29: infra_endpoints 可用时已含配置服务器真实 IP,域名解析自动让位(去重) */
+    '    for H in $ETCS; do',
+    '      CIP=$(nslookup $H 127.0.0.1 2>/dev/null | awk "/^Address/{print \\$3}" | tail -1)',
+    '      case "$CIP" in *.*.*.*) iptables -t nat -I HS_LAN 1 -d $CIP -j RETURN; iptables -t mangle -I HS_UDP 1 -d $CIP -j RETURN ;; esac',
+    '    done',
+    '  fi',
     '  for PT in $ETPORTS; do',
     '    iptables -t mangle -I HS_UDP 1 -p udp --dport $PT -j RETURN',
     '    iptables -t nat -I HS_LAN 1 -p tcp --dport $PT -j RETURN',
@@ -1352,12 +1656,22 @@ function genFwSh() {
     '    iptables -t mangle -A HS_UDP -p udp -j MARK --set-mark $MARK',
     '    echo "WARN: xt_TPROXY 不可用,UDP 走 TUN 降级(游戏/QUIC 可能异常)"',
     '  fi',
+    /* F04: UDP 侧强制 CIDR 直送(与链尾同形态),插后重排 198.18 源 RETURN 到顶
+       (防引擎 fake-IP 源回流被 FC 规则抓回引擎=回环) */
+    '  for NET in $FCIDRS; do',
+    '    if [ "$TPROXY_MODE" = "1" ]; then iptables -t mangle -I HS_UDP 1 -d $NET -p udp -j TPROXY --on-port $TPROXYPORT --tproxy-mark $MARK 2>/dev/null;',
+    '    else iptables -t mangle -I HS_UDP 1 -d $NET -p udp -j MARK --set-mark $MARK; fi',
+    '  done',
+    '  if [ -n "$FCIDRS" ]; then',
+    '    while iptables -t mangle -D HS_UDP -s 198.18.0.0/15 -j RETURN 2>/dev/null; do :; done',
+    '    iptables -t mangle -I HS_UDP 1 -s 198.18.0.0/15 -j RETURN',
+    '  fi',
     '  if [ "$ALLMODE" = "1" ]; then',
     /* v1.8.5: 先插 LAN 再插 DNS(-I 1 每次插到最顶)→ PREROUTING 最终顺序 DNS→LAN;此前相反,
        LAN 链末尾的 tcp catch-all 会把 TCP:53 抢走,导致 TCP DNS 劫持分支不可达(2026-09-13 审查 P2) */
-    '    iptables -t nat -I PREROUTING 1 -j HS_LAN',
-    '    iptables -t nat -I PREROUTING 1 -j HS_DNS',
-    '    iptables -t mangle -I PREROUTING 1 -j HS_UDP',
+    '    iptables -t nat -I PREROUTING 1 -i br-lan -j HS_LAN',
+    '    iptables -t nat -I PREROUTING 1 -i br-lan -j HS_DNS',
+    '    iptables -t mangle -I PREROUTING 1 -i br-lan -j HS_UDP', /* 紧修: 全接管接口限定——WAN 入站(同设备 Lucky 端口转发/反代/STUN)不再被劫持 */
     '  elif [ -n "$WMACS" ]; then',
     '    if ipset create hs_wmac hash:mac -exist 2>/dev/null && ipset flush hs_wmac 2>/dev/null; then',
     '      for MAC in $WMACS; do ipset add hs_wmac $MAC -exist 2>/dev/null; done',
@@ -1372,9 +1686,32 @@ function genFwSh() {
     '        iptables -t mangle -I PREROUTING 1 -m mac --mac-source $MAC -j HS_UDP',
     '      done',
     '    else',
-    '      echo "WARN: 白名单门控不可用(ipset 与 -m mac 均缺失),本次未挂接管"',
+    '      echo "ERR: 白名单门控不可用(ipset 与 -m mac 均缺失),本次未挂接管"',
     '    fi',
     '  fi',
+    /* 方案A: 线路分派链——hs_wl_<id>(MAC 集)→线路链→线路 listener;链内无 hs_cn RETURN
+       (国内流量须进引擎由 RULE-SET,china_ip 判 DIRECT——F03 序);挂载 -I 1 压主链之上,
+       DNS 链后插在顶(与主链同口径 DNS→LAN) */
+    ...LN_FW.flatMap(w => [
+      '  ipset create hs_wl_' + w.id + ' hash:mac -exist 2>/dev/null && ipset flush hs_wl_' + w.id + ' 2>/dev/null',
+      '  for M in ' + (w.macs.length ? w.macs.join(' ') : '') + '; do ipset add hs_wl_' + w.id + ' $M -exist 2>/dev/null; done',
+      '  iptables -t nat -N HS_LAN_' + w.id + ' 2>/dev/null; iptables -t nat -F HS_LAN_' + w.id + ' 2>/dev/null',
+      '  iptables -t mangle -N HS_UDP_' + w.id + ' 2>/dev/null; iptables -t mangle -F HS_UDP_' + w.id + ' 2>/dev/null',
+      '  for NET in 0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4 255.255.255.255/32; do',
+      '    iptables -t nat -A HS_LAN_' + w.id + ' -d $NET -j RETURN',
+      '    iptables -t mangle -A HS_UDP_' + w.id + ' -d $NET -j RETURN',
+      '  done',
+      '  for NET in $ETNETS $ETIPS $EXCIDRS; do',
+      '    iptables -t nat -I HS_LAN_' + w.id + ' 1 -d $NET -j RETURN',
+      '    iptables -t mangle -I HS_UDP_' + w.id + ' 1 -d $NET -j RETURN',
+      '  done',
+      '  iptables -t nat -A HS_LAN_' + w.id + ' -p tcp -j REDIRECT --to-ports ' + w.lr,
+      '  iptables -t mangle -I HS_UDP_' + w.id + ' 1 -p udp --dport 53 -j RETURN',
+      '  if [ "$TPROXY_MODE" = "1" ]; then iptables -t mangle -A HS_UDP_' + w.id + ' -p udp -j TPROXY --on-port ' + w.lt + ' --tproxy-mark $MARK 2>/dev/null; else iptables -t mangle -A HS_UDP_' + w.id + ' -p udp -j MARK --set-mark $MARK; fi',
+      '  iptables -t nat -I PREROUTING 1 -m set --match-set hs_wl_' + w.id + ' src -j HS_LAN_' + w.id,
+      '  iptables -t nat -I PREROUTING 1 -m set --match-set hs_wl_' + w.id + ' src -j HS_DNS',
+      '  iptables -t mangle -I PREROUTING 1 -m set --match-set hs_wl_' + w.id + ' src -j HS_UDP_' + w.id,
+    ]),
     '  ip rule add fwmark $MARK table $TABLE 2>/dev/null',
     '  if [ "$TPROXY_MODE" = "1" ]; then',
     '    ip route add local 0.0.0.0/0 dev lo table $TABLE 2>/dev/null',
@@ -1390,6 +1727,14 @@ function genFwSh() {
     '    iptables -t nat -A HS_OUT -d 10.0.0.0/8 -j RETURN',
     '    iptables -t nat -A HS_OUT -d 172.16.0.0/12 -j RETURN',
     '    for NET in $ETNETS; do iptables -t nat -I HS_OUT 1 -d $NET -j RETURN; done',
+    '    for IP in $ETIPS; do iptables -t nat -I HS_OUT 1 -d $IP -j RETURN; done',
+    '    if [ -n "$ETTUN" ]; then iptables -t nat -I HS_OUT 1 -o $ETTUN -j RETURN 2>/dev/null; fi',
+    '    if [ -z "$ETIPS" ] && [ -n "$ETCS" ]; then',
+    '      for H in $ETCS; do',
+    '        CIP=$(nslookup $H 127.0.0.1 2>/dev/null | awk "/^Address/{print \\$3}" | tail -1)',
+    '        case "$CIP" in *.*.*.*) iptables -t nat -I HS_OUT 1 -d $CIP -j RETURN ;; esac',
+    '      done',
+    '    fi',
     '    for NET in $ETNETS6; do ip6tables -t nat -I HS_V6_LAN 1 -d $NET -j RETURN 2>/dev/null; done',
     '    for PT in $ETPORTS; do iptables -t nat -I HS_OUT 1 -p tcp --dport $PT -j RETURN; done',
     '    iptables -t nat -A HS_OUT -p tcp -j REDIRECT --to-ports $REDIR',
@@ -1409,8 +1754,8 @@ function genFwSh() {
     '  ip6tables -t nat -A HS_V6_DNS -p tcp --dport 53 -j REDIRECT --to-ports $DNSPORT',
     '  ip6tables -t nat -A HS_V6_LAN -p tcp -j REDIRECT --to-ports $REDIR',
     '  if [ "$ALLMODE" = "1" ]; then',
-    '    ip6tables -t nat -I PREROUTING 1 -j HS_V6_LAN',
-    '    ip6tables -t nat -I PREROUTING 1 -j HS_V6_DNS',
+    '    ip6tables -t nat -I PREROUTING 1 -i br-lan -j HS_V6_LAN',
+    '    ip6tables -t nat -I PREROUTING 1 -i br-lan -j HS_V6_DNS', /* 紧修: v6 全接管同款接口限定 */
     '  elif [ -n "$WMACS" ]; then',
     '    if ip6tables -m set -h >/dev/null 2>&1 && ipset list hs_wmac >/dev/null 2>&1; then',
     '      ip6tables -t nat -I PREROUTING 1 -m set --match-set hs_wmac src -j HS_V6_LAN',
@@ -1420,6 +1765,8 @@ function genFwSh() {
     '        ip6tables -t nat -I PREROUTING 1 -m mac --mac-source $MAC -j HS_V6_LAN',
     '        ip6tables -t nat -I PREROUTING 1 -m mac --mac-source $MAC -j HS_V6_DNS',
     '      done',
+    '    else',
+    "      echo \"ERR: v6白名单门控不可用(ipset与-m mac均缺失),本次未挂v6接管\"", /* 审查P2-8: 与 v4 同场景对齐(此前静默) */
     '    fi',
     '  fi',
     '  ip6tables -t mangle -N HS_V6_UDP 2>/dev/null; ip6tables -t mangle -F HS_V6_UDP 2>/dev/null',
@@ -1436,7 +1783,7 @@ function genFwSh() {
     '  if ip6tables -t mangle -A HS_V6_UDP -p udp -j TPROXY --on-port $TPROXYPORT --tproxy-mark $MARK 2>/dev/null; then',
     '    TP6=1',
     '    if [ "$ALLMODE" = "1" ]; then',
-    '      ip6tables -t mangle -I PREROUTING 1 -j HS_V6_UDP',
+    '      ip6tables -t mangle -I PREROUTING 1 -i br-lan -j HS_V6_UDP', /* 紧修: 同上 */
     '    elif [ -n "$WMACS" ]; then',
     '      if ip6tables -m set -h >/dev/null 2>&1 && ipset list hs_wmac >/dev/null 2>&1; then',
     '        ip6tables -t mangle -I PREROUTING 1 -m set --match-set hs_wmac src -j HS_V6_UDP',
@@ -1476,18 +1823,27 @@ async function hsDiskKB() {
   return nums.length ? Math.max.apply(null, nums) : 0; /* 与诊断⑦同口径:/data 与 /overlay 同 mount 时取其一不双计 */
 }
 async function hsCleanJunk() {
-  /* 清插件目录可再生的临时产物:下载残留(.dl/.dl.gz)、解压中间件(mihomo.tmp)、轮询哨兵(.dl.exit/.pf.exit)、写盘备份(.bak) */
-  await run('cd ' + shq(DIR) + ' 2>/dev/null && rm -f *.dl *.dl.gz mihomo.tmp .dl.exit .pf.exit fw.sh.bak start.sh.bak config.yaml.bak conf.json.bak 2>/dev/null', 8000);
+  /* 清插件目录可再生的临时产物:下载残留(.dl/.dl.gz)、解压中间件(mihomo.tmp)、轮询哨兵(四任务 .exit/.pid)、写盘备份(.bak) */
+  await run('cd ' + shq(DIR) + ' 2>/dev/null && rm -f *.dl *.dl.gz mihomo.tmp .dl.exit .pf.exit .geo.exit .chn.exit .dl.pid .pf.pid .geo.pid .chn.pid fw.sh.bak start.sh.bak config.yaml.bak conf.json.bak 2>/dev/null', 8000);
   return await hsDiskKB();
 }
 async function applyFw() {
   await readEtState();
+  HS_ET_SIG = etSig(); /* 审查 P1-1: 记录本次 applyFw 消费的 ET 快照签名,供 syncEtRules 比对 */
   const w = await writeFile(FW, genFwSh());
   if (!w) { toast('防火墙脚本写入失败', 'red'); return false }
   const r = await run('chmod 755 ' + shq(FW) + '; sh ' + shq(FW) + ' apply 2>&1; echo "---RULES---"; iptables -t nat -S PREROUTING 2>/dev/null | grep HS_ | head -6; iptables -t nat -S HS_LAN 2>/dev/null | head -8', 15000);
   console.log('[小海关] applyFw 结果:', r.content);
   const fwOut = (r.content || '').split('---RULES---')[0];
-  if (/No chain|Bad argument|ip6tables:|iptables: error/i.test(fwOut)) await opLog('fw应用告警: ' + fwOut.trim().slice(0, 200));
+  /* F13: 致命/非致命分级——命令执行错误(工具缺失/内核拒权/链操作失败/ERR 级挂载失败)即接管未生效,
+     必须 return false 让调用方与用户感知(引擎在跑但流量未接管);纯 WARN/INFO 降级提示保留记录不中止(降级=尽力而为仍挂了规则) */
+  const fatal = fwOut.match(/No chain|Bad argument|iptables: error|ip6tables:|not found|Permission denied|Operation not permitted|ERR:/i);
+  if (fatal) {
+    const line = (fwOut.split('\n').find(l => new RegExp(fatal[0], 'i').test(l)) || '').slice(0, 120);
+    toast('❌ 规则挂载失败: ' + line, 'red');
+    await opLog('fw应用致命失败(接管未生效): ' + line);
+    return false;
+  }
   /* v1.8.9: WARN/INFO 行完整保留——此前 50 字符截断把"v6国内直通规则未挂载"等关键告警藏在日志外(用户设备实证) */
   else {
     const warns = fwOut.trim().split('\n').filter(l => /WARN|INFO/.test(l)).join(' | ');
@@ -1495,7 +1851,16 @@ async function applyFw() {
   }
   return true;
 }
+/* F11: 下载任务自有 curl 清理——按本任务 pid 文件杀自己启动的 curl(TERM+有界复查),绝不遍历 pidof curl 误伤无关下载;
+   exit 文件已写入=上次下载已自然结束,pid 可能已被系统复用→跳过 kill 只清 pid 文件;pid 非数字/0/1 一律不杀 */
+const killOwnDl = (pidF, exitF) => 'P=$(cat ' + shq(pidF) + ' 2>/dev/null || echo 0); case "$P" in *[!0-9]*|"") P=0;; esac; '
+  + 'if [ "$P" -gt 1 ] 2>/dev/null && [ ! -s ' + shq(exitF) + ' ]; then kill "$P" 2>/dev/null; sleep 1; kill -0 "$P" 2>/dev/null && kill "$P" 2>/dev/null; sleep 1; fi; rm -f ' + shq(pidF);
 /* ---- 无感启停 ---- */
+/* F15: 引擎自有实例枚举/杀除——pidof mihomo 逐个 readlink /proc/PID/exe 核验等于本插件
+   二进制路径(生产固定路径)才计入;同名他装进程(异路径 exe)不枚举不杀(F01 buildReadinessCommand
+   同款判定推广);杀除后由调用方复查退出(与 F11 下载自有 PID 同纪律) */
+const ownEnginePids = () => 'PIDS=""; for P in $(pidof mihomo 2>/dev/null); do [ "$(readlink /proc/$P/exe 2>/dev/null)" = ' + shq(BIN) + ' ] && PIDS="$PIDS $P"; done; echo $PIDS';
+const killOwnEngines = (sig) => 'for P in $(pidof mihomo 2>/dev/null); do [ "$(readlink /proc/$P/exe 2>/dev/null)" = ' + shq(BIN) + ' ] && kill ' + (sig || '') + ' $P 2>/dev/null; done';
 /* 启动自检: 缺失数据自动补齐(带进度弹窗); 节点源缺失则引导用户添加 */
 async function preflightDl(name, url, dst, minSz, txt, cdnUrl) {
   /* v1.8.8: cdnUrl 存在时作为第一源(CDN直连,国内可达),实现 ipv6 数据源"优先直连下载" */
@@ -1506,7 +1871,7 @@ async function preflightDl(name, url, dst, minSz, txt, cdnUrl) {
     const src = seq[si];
     txt('⬇ ' + name + ' · 源' + (si + 1) + '/' + seq.length + '(' + src.name + ')…');
     const tmpF = dst + '.dl';
-    await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.pf.exit') + '; nohup sh -c \'curl -sL --connect-timeout 8 -m 180 ' + (src.px ? '-x ' + shq(src.px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(src.url) + ' 2>/dev/null; echo $? > ' + shq(DIR + '/.pf.exit') + '\' >/dev/null 2>&1 &', 5000);
+    await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.pf.exit') + ' ' + shq(DIR + '/.pf.pid') + '; nohup sh -c \'curl -sL --connect-timeout 8 -m 180 ' + (src.px ? '-x ' + shq(src.px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(src.url) + ' 2>/dev/null & echo $! > ' + shq(DIR + '/.pf.pid') + '; wait $!; echo $? > ' + shq(DIR + '/.pf.exit') + '\' >/dev/null 2>&1 &', 5000); /* F11: 记录自有 curl PID($!+wait),清理只杀自有 */
     let lastSz = -1, stag = 0, done = false;
     for (let pi = 0; pi < 130; pi++) {
       await wait(1500);
@@ -1514,10 +1879,10 @@ async function preflightDl(name, url, dst, minSz, txt, cdnUrl) {
       if (ex !== '') { done = ex === '0'; break }
       const sz = pInt(await run('wc -c < ' + shq(tmpF) + ' 2>/dev/null', 3000));
       /* v1.8.8: 停滞阈值 10→6,空挂快速失败(同 chnInstall) */
-      if (sz === lastSz) { stag++; if (stag >= 6) { await run('for P in $(pidof curl); do kill $P; done 2>/dev/null', 3000); break } } else { stag = 0; lastSz = sz }
+      if (sz === lastSz) { stag++; if (stag >= 6) { await run(killOwnDl(DIR + '/.pf.pid', DIR + '/.pf.exit'), 8000); break } } else { stag = 0; lastSz = sz }
       txt('⬇ ' + name + ' · ' + (sz / 1048576).toFixed(2) + ' MB(' + src.name + ')');
     }
-    await run('rm -f ' + shq(DIR + '/.pf.exit'), 3000);
+    await run('rm -f ' + shq(DIR + '/.pf.exit') + ' ' + shq(DIR + '/.pf.pid'), 3000);
     /* v1.8.5: 补最终尺寸复测——curl 在首个 1.5s 轮询前结束则 lastSz=-1,会误判失败并删掉下好的文件
        (china6 这类小文件高发);与 chnInstall 的事后测口径对齐(2026-09-13 审查 P2) */
     const finSz = done ? pInt(await run('wc -c < ' + shq(tmpF) + ' 2>/dev/null', 3000)) : 0;
@@ -1530,6 +1895,7 @@ async function bootPreflight() {
   /* v1.8.5: 先补读手动节点——此前 HS_MANUAL 在 bootPreflight 之后才 refresh,
      纯手动节点用户刷新页面后直接启动会误报"未添加订阅或手动节点"(2026-09-13 审查 P2) */
   if (!HS_MANUAL_LOADED) await refreshManual();
+  await refreshSubRaw(); /* v2.7.25: 引擎启动前订阅原文就绪(融合模式依赖,幂等) */
   /* 节点源: 订阅或手动节点二缺一 */
   const hasNodeSrc = (C.activeSub >= 0 && C.subs[C.activeSub]) || HS_MANUAL.length > 0;
   if (!hasNodeSrc) {
@@ -1578,16 +1944,24 @@ async function bootPreflight() {
 /* P0-7②: chnroute 同源 CIDR 规则集生成(GeoLite2 ASN 注册国误判根治;与防火墙 hs_cn 同源数据,两处行为一致) */
 async function ensureChinaIpRules() {
   if (!(ST.chn > 0)) return true;
-  const r = await run('mkdir -p ' + DIR + '/rules; awk \'{if ($1 ~ /^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\\//) print $1}\' ' + DIR + '/chnroute.txt > ' + DIR + '/rules/china_ip.txt 2>/dev/null && wc -l < ' + DIR + '/rules/china_ip.txt', 8000);
+  /* F16: 双栈同源——v4 CIDR 与 v6 CIDR 同文件合并(behavior:ipcidr 官方支持混合载荷:
+     wiki.metacubex.one rule-providers ipcidr 每行一个 CIDR,内核 IpCidrTrie v4/v6 通吃,
+     IP-CIDR6 仅 IP-CIDR 别名);v6 文件缺失时 0 条 v6=v4-only 现状不劣化;
+     国内 v6 目标进引擎后命中国内表 DIRECT,不再落入代理兜底(此前只靠防火墙 hs_cn6 提前 RETURN) */
+  const r = await run('mkdir -p ' + DIR + '/rules; cat ' + DIR + '/chnroute6.txt 2>/dev/null | awk \'{if ($1 ~ /^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\\//) print $1; else if ($1 ~ /^[0-9a-fA-F:]+\\/[0-9]+$/) print $1}\' ' + DIR + '/chnroute.txt - 2>/dev/null > ' + DIR + '/rules/china_ip.txt && wc -l < ' + DIR + '/rules/china_ip.txt', 8000); /* v6 缺失时 cat 空输入,awk 双源 stdin 拼接,退出码稳定 0 */
   const n = parseInt(ct(r)) || 0;
   if (n < 5000) { await opLog('china_ip 规则集生成异常: ' + n + ' 条(chnroute 文件问题?)'); return false }
   return true;
 }
-async function engineStart() {
+async function engineStart(restore) {
   /* 升级感知: 进入时引擎可能是旧组件在跑(init 升级对账已标记),本次启动全量重生成三件套=完成升级,
      成功后按"升级完成"而非"普通启动"反馈,并复核指纹确认三件套真的换新(停止态启动同样覆盖) */
   const wasUpgrade = !!(ST.upgradePending && ST.upgradePending.length);
   if (!ST.bin) { detectArch().then(() => openInstallGuide()); return false }
+  /* F12: restore 恢复模式——三件套已由调用方从升级备份恢复到盘上,跳过磁盘预检/数据补齐/配置
+     重新生成与 start.sh 重写(任何一步都会用当前代码重新生成,覆盖刚恢复的备份内容),
+     直接以盘上三件套启动+探活+烙印复核;正常启动路径零改动 */
+  if (!restore) {
   /* v2.1.5: 磁盘预检——满盘时三件套/配置写入全部静默失败(真机 0.0MB 实证),先清临时冗余,仍不足则明确报错不进入启动 */
   let freeKB = await hsDiskKB();
   if (freeKB > 0 && freeKB < 5120) {
@@ -1606,20 +1980,23 @@ async function engineStart() {
   if (!(await writeConfigAndValidate())) return false;
   const w = await writeFile(START, genStartSh());
   if (!w) { HS_LAST_ERR = '启动脚本写入失败(磁盘空间/权限?)'; toast('启动脚本写入失败', 'red'); return false }
-  await run('chmod 755 ' + shq(START) + '; sh ' + shq(START), 8000);
+  } else {
+    await opLog('恢复模式启动:直接使用已恢复的三件套(不重新生成)');
+  }
+  await run('chmod 700 ' + shq(START) + '; sh ' + shq(START), 8000); /* F14: start.sh 内嵌 secret,权限 755→700(与 BOOT_SH 同档,root 执行不受影响) */
   /* 端口探活(最多 8 秒) */
   let ready = false;
   for (let i = 0; i < 8 && !ready; i++) {
     await wait(1000);
     await collectStatus();
-    /* v1.8.5: 改看真实就绪信号——listen.mixed/redir/dns 仅在控制接口 /version 探测成功时置位;
-       此前的 LM/LR/LD 是 collectStatus shell 里硬编码的 echo =1 占位(恒真),探活形同虚设(2026-09-13 审查 P1) */
+    /* 控制接口鉴权通过且对应进程确实监听所需端口后才允许挂载。 */
     ready = !!(ST.listen.mixed && ST.listen.redir && ST.listen.dns);
   }
   if (!ST.running) {
     HS_LAST_ERR = '引擎启动失败' + (C.logEnabled ? '(详见运行日志)' : '(可在 日志页签 开启日志后重试)'); toast('启动失败' + (C.logEnabled ? ',请查看日志' : ':可在 日志页签 开启日志后重试'), 'red');
-    /* 启动失败急救: 无条件清规则+杀残留引擎——引擎不在场时任何残留 HS_* 规则都是黑洞(1.6.7 not found 事故实证) */
-    await run('sh ' + shq(FW) + ' clean 2>/dev/null; for P in $(pidof mihomo); do kill $P 2>/dev/null; done', 8000).catch(() => { });
+    /* 启动失败急救: 无条件清规则+杀自有引擎实例——引擎不在场时任何残留 HS_* 规则都是黑洞(1.6.7 not found 事故实证);
+       F15: 杀除经 readlink 所有权核验,只杀本插件二进制实例,同名他装进程不动 */
+    await run('sh ' + shq(FW) + ' clean 2>/dev/null; ' + killOwnEngines(''), 8000).catch(() => { });
     await opLog('启动失败急救: 已清全部接管规则+停残留引擎进程(恢复直连)');
     return false;
   }
@@ -1632,9 +2009,15 @@ async function engineStart() {
     await opLog('启动中止: 端口未就绪,已清规则(防 REDIRECT 黑洞)');
     return false;
   }
-  if (C.s1 !== 'off' || C.s2) {
-    await applyFw();
-    await opLog('引擎启动+规则挂载(模式:' + C.s1 + ',S2:' + (C.s2 ? 'on' : 'off') + ')');
+  if (restore) {
+    /* F12: 恢复模式不 applyFw(其内部 genFwSh 会重生成覆盖刚恢复的备份 fw.sh)——
+       规则挂载由恢复的 start.sh/fw.sh 自带口径执行(与开机自启同源,备份版本的挂载逻辑) */
+    await opLog('引擎恢复启动(按备份三件套,规则口径同备份)');
+  } else if (C.s1 !== 'off' || C.s2) {
+    /* F13: 消费 applyFw 成败——引擎已就绪不中止启动(规则失败≠引擎失败,中止反而触发急救杀引擎),
+       但文案如实区分,用户可重试/跑诊断 */
+    const fwOk = await applyFw();
+    await opLog(fwOk ? '引擎启动+规则挂载(模式:' + C.s1 + ',S2:' + (C.s2 ? 'on' : 'off') + ')' : '引擎已启动,但规则挂载失败——流量未接管,可重试或跑诊断');
   } else {
     /* v2.1.5: 无接管启动也落盘新版 fw.sh(只写不执行)——升级复核要求三件烙印齐,
        此前不写=无接管用户升级必失败(F=0 S/Y 齐)→自动回滚→对账再报→死循环(真机 v2.1.4 实证) */
@@ -1645,7 +2028,22 @@ async function engineStart() {
     await opLog('引擎启动(无接管)');
   }
   ST.upgradePending = []; /* 本次启动已全量重生成三件套,升级对账归零 */
-  if (wasUpgrade) {
+  if (restore) {
+    /* F12: 恢复复核——三件套烙印互相一致(=同一备份版本)才算恢复完整,不要求等于当前 V
+       (恢复的本就是旧版);复核不齐返回 false,调用方保留备份可重试 */
+    const ck = await run(
+      'F=$(grep -m1 -o "#gen:v[0-9.]*" ' + shq(FW) + ' 2>/dev/null | cut -dv -f2); S=$(grep -m1 -o "#gen:v[0-9.]*" ' + shq(START) + ' 2>/dev/null | cut -dv -f2); Y=$(grep -m1 -o "#gen:v[0-9.]*" ' + shq(CFG) + ' 2>/dev/null | cut -dv -f2); echo "F=${F:-0} S=${S:-0} Y=${Y:-0}"', 8000);
+    const mm = (ck.content || '').match(/F=([\d.]*)\s+S=([\d.]*)\s+Y=([\d.]*)/) || [];
+    if (mm[1] && mm[1] === mm[2] && mm[2] === mm[3]) {
+      toast('✅ 已按备份恢复并启动(组件 v' + mm[1] + ')', 'green');
+      await opLog('恢复成功:三件套烙印一致 v' + mm[1] + '(未重新生成)');
+    } else {
+      HS_LAST_ERR = '恢复复核未齐(F/S/Y=' + (mm[1] || '?') + '/' + (mm[2] || '?') + '/' + (mm[3] || '?') + ')';
+      toast('⚠️ 引擎已启动,但' + HS_LAST_ERR + '(备份保留,可重试)', 'pink');
+      await opLog('恢复复核未齐:' + (ck.content || '').trim().slice(0, 40));
+      return false;
+    }
+  } else if (wasUpgrade) {
     /* 复核版本烙印: 三件套写盘成功≠内容正确,升级链路最后一道确认(一条 shell);
        与 upgradeAudit 同款读法,三处烙印都 = 当前 V 才算升级到位 */
     const ck = await run(
@@ -1676,12 +2074,18 @@ async function fwClean() {
 async function engineStop() {
   /* 无感停止: 先摘规则(新流量回直连) → 停进程 */
   await run('sh ' + shq(FW) + ' clean 2>&1', 12000);
-  const pids = (await run('pidof mihomo', 5000)).content.trim();
+  /* F15: 只停本插件实例(readlink 所有权核验),同名他装进程不动 */
+  const pids = (await run(ownEnginePids(), 5000)).content.trim();
   if (pids) {
-    await run('for P in ' + pids + '; do kill $P; done', 5000);
+    await run(killOwnEngines(''), 5000);
     await wait(600);
-    const p2 = (await run('pidof mihomo', 5000)).content.trim();
-    if (p2) await run('for P in ' + p2 + '; do kill -9 $P; done', 5000);
+    const p2 = (await run(ownEnginePids(), 5000)).content.trim();
+    if (p2) {
+      await run(killOwnEngines('-9'), 5000);
+      /* F15: 有界等待退出——未等退出就采集会误报"停止失败"(toast 与进程真正退出联动) */
+      let gi = 0;
+      while (gi++ < 10 && (await run(ownEnginePids(), 3000)).content.trim()) await wait(500);
+    }
   }
   /* 定点清 conntrack(有工具时) */
   await run('which conntrack >/dev/null 2>&1 && conntrack -D --dport ' + C.ports.redir + ' 2>/dev/null; echo ok', 5000);
@@ -1691,8 +2095,8 @@ async function engineStop() {
   if (ok) await opLog('引擎停止(规则已清)');
   return ok;
 }
-async function engineRestart() {
-  const a = await engineStop(); const b = await engineStart();
+async function engineRestart(restore) {
+  const a = await engineStop(); const b = await engineStart(restore);
   return a && b;
 }
 /* 白名单变更 → 增量应用规则 */
@@ -1749,10 +2153,13 @@ function injectCss() {
   + '.hs-modal.big{width:min(92vw,680px)}'
   + '@media(min-width:1025px){.hs-modal.big{width:min(52vw,780px);max-height:80vh;max-height:80dvh}}'
   + '@media(min-width:481px) and (max-width:1024px){.hs-modal.big{width:88vw;max-height:84vh;max-height:84dvh}}'
-  + '@media(max-width:480px){.hs-modal,.hs-modal.big{width:92vw}}'
+  + '@media(max-width:480px){'
+  + '.hs-modal,.hs-modal.big{width:96vw}'
+  + '.hs-mb{padding:10px 0 0}' /* v2.9.6: 左右边距 16→0(用户定调);此前对 .hs-row 的纵向堆叠改动修坏全页布局,已还原 */
+  + '}'
   + '.hs-mh{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.1);flex:none}'
   + '.hs-mh .t{font-weight:700;font-size:.9rem;color:var(--dark-title-color,skyblue)}'
-  + '.hs-mx{background:none;border:0;color:#9aa3b2;font-size:1.05rem;cursor:pointer;padding:2px 6px}'
+  + '.hs-mx{background:none;border:0;color:#b3bdcb;font-size:1.05rem;cursor:pointer;padding:2px 6px}'
   + '.hs-mb{padding:10px 16px 0;overflow:hidden;flex:1;min-height:0;display:flex;flex-direction:column}'
   + '.hs-pgscroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:14px}'
   + '.hs-pghead{flex:none;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)}'
@@ -1760,7 +2167,7 @@ function injectCss() {
   + '.hs-node-head{flex:none;background:var(--dark-card-bg,rgba(0,0,0,.24));border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:10px 12px 8px;margin-bottom:10px}'
   + '.hs-node-list{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 0 14px}'
   + '.hs-tabs{display:flex;gap:2px;padding:8px 12px 0;flex:none;overflow-x:auto}'
-  + '.hs-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:#9aa3b2;padding:8px 13px;font-size:.82rem;cursor:pointer;white-space:nowrap}'
+  + '.hs-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:#b3bdcb;padding:8px 13px;font-size:.82rem;cursor:pointer;white-space:nowrap}'
   + '.hs-tabs button.on{color:var(--dark-title-color,skyblue);border-bottom-color:var(--dark-title-color,skyblue);font-weight:600}'
   + '.hs-warn{background:rgba(229,115,115,.12);border:1px solid rgba(229,115,115,.35);color:#ffb3b3;border-radius:10px;padding:8px 10px;font-size:.76rem;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
   + '.hs-li{font-size:.78rem;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.06)}'
@@ -1768,7 +2175,7 @@ function injectCss() {
   + '.hs-row:last-child{border-bottom:0}'
   + '.hs-row .hs-sl{flex:1;min-width:0}'
   + '.hs-row .hs-st{font-size:.8rem}'
-  + '.hs-sd{font-size:.66rem;color:#9aa3b2;margin-top:2px;line-height:1.5}'
+  + '.hs-sd{font-size:.66rem;color:#b3bdcb;margin-top:2px;line-height:1.5}'
   + '.hs-row .hs-sc{flex:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;max-width:60%}'
   + '.hs-sec{background:var(--dark-card-bg,rgba(0,0,0,.24));border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:2px 12px 10px;margin-bottom:8px;line-height:1.45}'
   + '.hs-sec h4{margin:0;padding:8px 2px 6px;font-size:.7rem;color:var(--dark-title-color,skyblue);letter-spacing:.1em;font-weight:600}'
@@ -1783,7 +2190,7 @@ function injectCss() {
   + '.hs-fold[open] summary .hs-chev{transform:rotate(90deg)}'
   + '.hs-fold .hs-top{display:none}.hs-fold[open] .hs-top{display:inline}.hs-fold[open] .hs-tcl{display:none}'
   + '.hs-seg{display:flex;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.09);border-radius:8px;overflow:hidden}'
-  + '.hs-seg button{flex:1 0 auto;background:transparent;border:0;color:#9aa3b2;padding:5px 8px;font-size:.7rem;cursor:pointer;white-space:nowrap;min-width:0}'
+  + '.hs-seg button{flex:1 0 auto;background:transparent;border:0;color:#b3bdcb;padding:5px 8px;font-size:.7rem;cursor:pointer;white-space:nowrap;min-width:0}'
   + '.hs-seg button.on{background:var(--dark-btn-color-active,rgba(1,138,216,.66));color:#fff}'
   + '.hs-sw{position:relative;display:inline-block;width:46px;height:26px;flex:none}'
   + '.hs-sw input{opacity:0;width:0;height:0}'
@@ -1793,7 +2200,7 @@ function injectCss() {
   + '.hs-sw input:checked+span:before{transform:translateX(20px);background:#fff}'
   + '.hs-sw input:disabled+span{opacity:.4;cursor:not-allowed}'
   + '.hs-actions{display:flex;gap:8px;justify-content:flex-end;padding:10px 2px 0;flex-wrap:wrap}'
-  + '.hs-hint{font-size:.72rem;color:#9aa3b2}'
+  + '.hs-hint{font-size:.72rem;color:#b3bdcb}'
   + '.hs-pre{background:#1c1f26;color:#e8eaf0;border-radius:10px;padding:10px;font-size:.64rem;white-space:pre-wrap;word-break:break-all;max-height:44vh;overflow:auto;margin:0;font-family:Menlo,Consolas,monospace}'
   + '.hs-dg{background:var(--dark-card-bg,rgba(0,0,0,.24));border:1px solid rgba(255,255,255,.09);border-radius:10px;margin-bottom:9px;overflow:hidden}'
   + '.hs-dgh{display:flex;justify-content:space-between;padding:9px 12px;font-size:.8rem;font-weight:600;border-bottom:1px solid rgba(255,255,255,.1)}'
@@ -1820,6 +2227,126 @@ function injectCss() {
   + '.hs-btn-xs{padding:2px 8px;font-size:.68rem}'
   + '.hs-btn-right{margin-left:auto}'
   + '.hs-devrow{display:flex;align-items:center;gap:10px;background:var(--dark-card-bg,rgba(0,0,0,.24));border:1px solid rgba(255,255,255,.09);border-radius:10px;padding:10px 12px;margin-bottom:8px}'
+  /* v2.9.23 河流分岔·泳道定稿(ZCode v02 一比一重做): 独立风格自包含,不依赖面板样式——横版泳道SVG+检索/窄屏端点水轨+行内折叠 */
+  + '.hs-rv{position:relative}'
+  + '.hs-rv,.hs-rv *{box-sizing:border-box}'
+  + '.hs-rv svg{width:100%;height:auto;display:block}'
+  + '.hs-rv .mainflow{stroke-dasharray:7 11;animation:hsRvDashF .95s linear infinite}' /* v2.9.39: 提速+急缓节奏(真水流感) */
+  + '@keyframes hsRvDashF{0%{stroke-dashoffset:0}42%{stroke-dashoffset:-11}100%{stroke-dashoffset:-18}}'
+  + '.hs-rv .branch{stroke-dasharray:4 8;animation:hsRvDashB 1.4s linear infinite;transition:stroke-width .3s}'
+  + '@keyframes hsRvDashB{0%{stroke-dashoffset:0}45%{stroke-dashoffset:-7}100%{stroke-dashoffset:-12}}'
+  + '.hs-rv .branch.hot{stroke-width:3.2;animation-duration:.55s}'
+  + '.hs-rv .jn{cursor:pointer;transition:opacity .35s}'
+  + '.hs-rv .jn .hit{fill:transparent}'
+  + '.hs-rv .jn:hover .nd{filter:brightness(1.35)}'
+  + '.hs-rv .jn.on .nd{stroke-width:3.5}'
+  + '.hs-rv .jn.on .tagp{filter:brightness(1.45)}'
+  + '.hs-rv .jn.dim{opacity:.38}'
+  + '.hs-rv .jn.found .nd{animation:hsRvFoundP 1s ease-in-out 3}'
+  + '@keyframes hsRvFoundP{50%{filter:brightness(1.9)}}'
+  + '.hs-rvs{display:flex;gap:7px;padding:9px 2px 0}'
+  + '.hs-rvs input{flex:1;min-width:0;font-family:inherit;font-size:11.5px;color:#e8eaf0;background:rgba(255,255,255,.05);border:1px solid rgba(127,201,242,.16);border-radius:10px;padding:7px 11px;outline:none;transition:border-color .2s}'
+  + '.hs-rvs input:focus{border-color:rgba(127,201,242,.55)}'
+  + '.hs-rvs .hs-rvgo{font-family:inherit;font-size:11.5px;padding:0 12px;border-radius:10px;cursor:pointer;border:1px solid rgba(127,201,242,.45);background:rgba(127,201,242,.14);color:#7fc9f2}'
+  + '.hs-rvs .hs-rvgo:hover{filter:brightness(1.15)}'
+  + '.hs-rvnote{font-size:11px;color:#8ba0bd;padding:5px 2px 0;line-height:1.6}'
+  + '.hs-rvnote.ok{color:#e8eaf0}'
+  + '.hs-rvh{display:none;padding:4px 2px 2px}' /* v2.9.25: 释放横 padding(真机反馈拥挤) */
+  + '.hs-rvv{display:none;padding:2px 0 4px}' /* v2.9.34: 去 padding(真机反馈小屏拥挤) */
+  + '.hs-rv[data-mode=h] .hs-rvh{display:block}'
+  + '.hs-rv[data-mode=v] .hs-rvv{display:block}'
+  + '.hs-rvlk{position:relative;height:28px;display:none}'
+  + '.hs-rvlk.on{display:block}'
+  + '.hs-rv[data-mode=v] .hs-rvlk{display:none!important}'
+  + '.hs-rvlk .lkline{position:absolute;top:-24px;bottom:-1px;width:2px;border-radius:2px;background:repeating-linear-gradient(180deg,currentColor 0 6px,transparent 6px 12px);animation:hsRvDashDN .8s linear infinite}'
+  + '@keyframes hsRvDashDN{to{background-position:0 12px}}'
+  + '.hs-rvlk .lkdot{position:absolute;width:7px;height:7px;margin-left:-2.5px;border-radius:50%;background:currentColor;box-shadow:0 0 9px currentColor;animation:hsRvDropt 1.15s cubic-bezier(.45,.05,.55,.95) infinite;opacity:0}'
+  + '@keyframes hsRvDropt{0%{top:-15px;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:23px;opacity:0}}'
+  + '.hs-rvdt{display:none;position:relative;padding:14px;transform-origin:var(--ox,50%) 0;background:rgba(19,28,48,.55);border:1px solid rgba(255,255,255,.07);border-radius:12px;margin-bottom:10px}'
+  + '.hs-rvdt.show{display:block;animation:hsRvPour .5s cubic-bezier(.22,.9,.28,1) both /* v2.9.51: 展开回调丝滑档(真机反馈像卡顿),长动画保留给折叠/水流 */}' /* v2.9.49: 再放缓——人不是脚本 */ /* v2.9.39: 放缓(真机反馈太快没感觉) */
+  + '@keyframes hsRvPour{from{opacity:0;transform:translateY(-16px) scale(.965)}to{opacity:1;transform:none}}'
+  + '.hs-rvdt .hs-rvnotch{position:absolute;top:-2px;width:18px;height:4px;border-radius:2px;display:none}'
+  + '.hs-rvdt .hs-rvnotch.on{display:block}'
+  + '.hs-rv[data-mode=v] .hs-rvnotch{display:none!important}'
+  + '.hs-rvdt .hs-rvx{position:absolute;top:9px;right:10px;z-index:5;background:none;border:0;color:#8ba0bd;font-size:16px;cursor:pointer;padding:6px;font-family:inherit;line-height:1}'
+  + '.hs-rvdt .hs-rvx:hover{color:#e8eaf0}'
+  + '.hs-rv .d-head{display:flex;gap:9px;align-items:center;padding-right:28px}'
+  + '.hs-rv .d-ico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;border:1px solid;flex:0 0 auto}'
+  + '.hs-rv .d-t{flex:1;min-width:0}'
+  + '.hs-rv .d-t em{font-style:normal;font-size:10px;color:#8ba0bd;display:block}'
+  + '.hs-rv .d-t h3{font-size:13px;color:#e8eaf0;margin:0;font-weight:700}'
+  + '.hs-rv .fchip{margin-left:auto;font-size:10.5px;padding:2px 9px;border-radius:999px;border:1px solid;white-space:nowrap;flex:none}'
+  + '.hs-rv .fchip.direct{color:#8fe39a;border-color:rgba(102,187,106,.45);background:rgba(102,187,106,.1)}'
+  + '.hs-rv .fchip.direct2{color:#9ccc65;border-color:rgba(156,204,101,.45);background:rgba(156,204,101,.1)}'
+  + '.hs-rv .fchip.proxy{color:#ffcc80;border-color:rgba(255,183,77,.45);background:rgba(255,183,77,.1)}'
+  + '.hs-rv .fchip.rule{color:#7fc9f2;border-color:rgba(127,201,242,.45);background:rgba(127,201,242,.1)}'
+  + '.hs-rv .d-desc{margin:10px 0;font-size:11.5px;color:#b9c8dd;line-height:1.75}'
+  + '.hs-rv .d-rows{display:grid;gap:5px;margin-bottom:10px}'
+  + '.hs-rv .d-row{display:flex;justify-content:space-between;gap:12px;font-size:11.5px;padding:6px 10px;background:rgba(255,255,255,.035);border-radius:8px}'
+  + '.hs-rv .d-row span{color:#8ba0bd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}'
+  + '.hs-rv .d-row b{font-weight:600;text-align:right;color:#e8eaf0}'
+  + '.hs-rv .d-acts{display:flex;gap:8px;flex-wrap:wrap}'
+  + '.hs-rv .d-acts:empty{display:none}'
+  + '.hs-rv .hs-rv-vd{font-size:11px;padding:1px 8px;border-radius:999px;margin:0 1px;font-weight:700;white-space:nowrap}' /* v2.9.36: 判向醒目胶囊 */
+  + '.hs-rv .hs-rv-vd.vd-d{color:#8fe39a;background:rgba(102,187,106,.16);border:1px solid rgba(102,187,106,.45)}'
+  + '.hs-rv .hs-rv-vd.vd-p{color:#ffcc80;background:rgba(255,183,77,.16);border:1px solid rgba(255,183,77,.45)}'
+  + '.hs-rv .hs-rv-vd.vd-r{color:#ff8a80;background:rgba(255,120,100,.16);border:1px solid rgba(255,120,100,.45)}'
+  + '.hs-rv .hitbanner{display:flex;gap:8px;align-items:center;font-size:11px;padding:7px 10px;border-radius:10px;border:1px solid;margin-bottom:11px;line-height:1.5;flex-wrap:wrap}'
+  + '.hs-rvdt.show .d-head,.hs-rv .vitem.open .d-head{animation:hsRvRowin .34s cubic-bezier(.2,.8,.25,1) both}'
+  + '.hs-rvdt.show .d-desc,.hs-rv .vitem.open .d-desc{animation:hsRvRowin .34s cubic-bezier(.2,.8,.25,1) both;animation-delay:.06s}'
+  + '.hs-rvdt.show .d-row,.hs-rv .vitem.open .d-row{animation:hsRvRowin .34s cubic-bezier(.2,.8,.25,1) both}'
+  + '.hs-rvdt.show .d-rows .d-row:nth-child(1),.hs-rv .vitem.open .d-rows .d-row:nth-child(1){animation-delay:.12s}'
+  + '.hs-rvdt.show .d-rows .d-row:nth-child(2),.hs-rv .vitem.open .d-rows .d-row:nth-child(2){animation-delay:.19s}'
+  + '.hs-rvdt.show .d-rows .d-row:nth-child(3),.hs-rv .vitem.open .d-rows .d-row:nth-child(3){animation-delay:.19s}'
+  + '.hs-rvdt.show .d-rows .d-row:nth-child(4),.hs-rv .vitem.open .d-rows .d-row:nth-child(4){animation-delay:.26s}' /* v2.9.39: 第4行延迟补齐 */
+  + '.hs-rvdt.show .d-acts,.hs-rv .vitem.open .d-acts{animation:hsRvRowin .34s cubic-bezier(.2,.8,.25,1) both;animation-delay:.32s}'
+  + '@keyframes hsRvRowin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}'
+  + '@keyframes hsRvLiveIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}'
+  + '.hs-rvv .railwrap{position:relative;padding:2px 0}'
+  + '.hs-rvv .rail{position:absolute;left:16.5px;top:17px;bottom:17px;width:3px;border-radius:2px;background:repeating-linear-gradient(180deg,rgba(127,201,242,.75) 0 7px,transparent 7px 16px);animation:hsRvRail .95s linear infinite;box-shadow:0 0 5px rgba(127,201,242,.3)}' /* v2.9.36: 3px+辉光=粗细层次 */
+  + '.hs-rvv .railfill{position:absolute;left:16px;top:17px;width:4px;height:0;border-radius:2px;background:linear-gradient(180deg,rgba(127,201,242,.95),rgba(127,201,242,.5));box-shadow:0 0 8px rgba(127,201,242,.45);transition:height 1.1s cubic-bezier(.25,.9,.3,1);z-index:0}' /* v2.9.36: 竖版水流填充(选中行) */
+  + '.hs-rvv .raildot{position:absolute;left:14.5px;width:7px;height:7px;border-radius:50%;background:#7fc9f2;box-shadow:0 0 8px rgba(127,201,242,.9);animation:hsRvRailDrop 2.6s linear infinite;opacity:0;z-index:1}' /* v2.9.27: 竖版水流粒子(对齐 PC 光珠) */
+  + '.hs-rvv .raildot.r2{animation-delay:1.3s}'
+  + '@keyframes hsRvRailDrop{0%{top:17px;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:calc(100% - 24px);opacity:0}}'
+  + '@keyframes hsRvRail{0%{background-position:0 0}40%{background-position:0 10px}100%{background-position:0 16px}}'
+  + '.hs-rvv .vcap{display:flex;align-items:center;gap:8px;min-height:34px}'
+  + '.hs-rvv .vdot{flex:0 0 auto;width:11px;height:11px;margin-left:12.5px;border-radius:50%;position:relative;z-index:1}'
+  + '.hs-rvv .vdot.src{background:#7fc9f2;box-shadow:0 0 9px rgba(127,201,242,.85);animation:hsRvSrcP 2.4s ease-in-out infinite}'
+  + '@keyframes hsRvSrcP{0%,100%{box-shadow:0 0 6px rgba(127,201,242,.55)}50%{box-shadow:0 0 14px rgba(127,201,242,1)}}'
+  + '.hs-rvv .vdot.end{background:#141822;border:2px solid #7fc9f2}'
+  + '.hs-rvv .vlab{font-size:10px;color:#8ba0bd;line-height:1.5}'
+  + '.hs-rvv .vlab b{color:#e8eaf0;font-size:11px;font-weight:600}'
+  + '.hs-rvv .vlaneh{display:flex;align-items:center;gap:8px;margin:7px 2px 5px;font-size:9.5px;white-space:nowrap}'
+  + '.hs-rvv .vlaneh.g{color:#8fe39a}'
+  + '.hs-rvv .vlaneh.b{color:#7fc9f2}'
+  + '.hs-rvv .vlaneh:before,.hs-rvv .vlaneh:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent)}'
+  + '.hs-rvv .vitem{position:relative}'
+  + '.hs-rvv .vitem.open .vrow{background:rgba(255,255,255,.06);box-shadow:inset 2px 0 0 var(--c,#7fc9f2)}'
+  + '.hs-rvv .vrow{position:relative;display:flex;align-items:center;gap:9px;padding:9px 6px 9px 2px;margin:2px 0;background:none;border:0;color:#e8eaf0;font-family:inherit;cursor:pointer;width:100%;border-radius:10px;text-align:left;transition:background .25s,box-shadow .25s}'
+  + '.hs-rvv .vrow .dot{flex:0 0 auto;width:22px;height:22px;margin-left:5px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:#1a2130;border:2px solid var(--c,#7fc9f2);color:var(--c,#7fc9f2);position:relative;z-index:1;transition:box-shadow .3s}'
+  + '.hs-rvv .vitem.open .vrow .dot{box-shadow:0 0 0 4px rgba(255,255,255,.05),0 0 12px var(--c,#7fc9f2)}'
+  + '.hs-rvv .vrow .vmain{flex:1;min-width:0}'
+  + '.hs-rvv .vrow .nm{font-size:12.5px;font-weight:600;display:flex;gap:6px;align-items:baseline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  + '.hs-rvv .vrow .ct{font-size:10.5px;color:#8ba0bd;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  + '.hs-rvv .vrow .fchip{font-size:9.5px;padding:2px 7px}' /* v2.9.25: 竖版行内胶囊缩号 */
+  + '.hs-rvv .chev{flex:0 0 auto;color:#8ba0bd;font-size:12px;transition:transform .3s}'
+  + '.hs-rvv .vitem.open .chev{transform:rotate(90deg);color:#e8eaf0}'
+  + '.hs-rvv .vpanel{max-height:0;overflow:hidden;transition:max-height 1.35s cubic-bezier(.3,.8,.3,1)}'
+  + '.hs-rvv .vpanel-in{padding:6px 6px 12px 36px}'
+  + '.hs-rvv .vpanel-in .d-row{flex-wrap:wrap;row-gap:2px}'
+  + '.hs-rvv .vpanel-in .d-row span{white-space:normal}'
+  + '.hs-rvv .vpanel-in .d-head{padding-right:0}'
+  + '.hs-rvv .vpanel-in .d-t h3{font-size:12.5px}'
+  + '@media(prefers-reduced-motion:reduce){.hs-rv *,.hs-rv *:before,.hs-rv *:after{animation:none!important;transition:none!important}}'
+  /* v2.7.0 订阅卡片占位注释保留 */
+  /* v2.7.0 订阅卡片(卡片化改版): 左色条区分激活/备用,流量条+到期徽章+操作行 */
+  + '.hs-subcard{position:relative;background:rgba(19,28,48,.55);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px 14px 12px;margin-bottom:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.3)}'
+  + '.hs-subcard.active{border-color:rgba(127,201,242,.4)}'
+  + '.hs-subcard.active:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#7fc9f2;border-radius:0 3px 3px 0}'
+  + '.hs-subcard.standby{opacity:.9}'
+  + '.hs-scbar{height:7px;background:rgba(0,0,0,.45);border-radius:5px;overflow:hidden;border:1px solid rgba(255,255,255,.08);margin:6px 0 2px}'
+  + '.hs-scfill{height:100%;border-radius:5px;background:linear-gradient(90deg,#2f6ae0,#7fc9f2)}'
+  + '.hs-scfill.hot{background:linear-gradient(90deg,#c96a2f,#ffb74d)}'
   + '.hs-devrow.off{opacity:.55}'
   + '.hs-nrow{display:flex;align-items:center;padding:9px 10px;cursor:pointer;border-bottom:1px dashed rgba(255,255,255,.06);font-size:.8rem}'
   + '@keyframes hs-pulse{0%,100%{opacity:.5}50%{opacity:1}}'
@@ -1838,7 +2365,7 @@ function injectCss() {
   + '.hs-prog-ind::after{content:"";position:absolute;top:0;bottom:0;width:30%;border-radius:6px;background:linear-gradient(90deg,transparent,#7fc9f2,transparent);animation:hsflow 1.1s ease-in-out infinite}'
   + '@keyframes hsflow{0%{left:-32%}100%{left:102%}}'
   + '.hs-prog-fill{height:100%;background:linear-gradient(90deg,#2f6ae0,#7fc9f2);border-radius:6px;transition:width .5s;width:0}'
-  + '.hs-prog-steps{display:flex;justify-content:space-between;font-size:.64rem;color:#9aa3b2;margin:6px 0}'
+  + '.hs-prog-steps{display:flex;justify-content:space-between;font-size:.64rem;color:#b3bdcb;margin:6px 0}'
   + '.hs-prog-steps .on{color:#7fc9f2;font-weight:bold}'
   + '.hs-prog-steps .done{color:#66bb6a}'
   + '.hs-cpr{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:.78rem;flex-wrap:wrap}'
@@ -1876,12 +2403,14 @@ function confirmBox(o) {
     $('#hs_cf_no').textContent = o.cancelText || '取消';
     mShow('hs_modal_cf');
     if (o.countdown > 0) {
+      clearInterval(hsConfirmTimer); /* 竞态防护: 新弹窗先清旧倒计时 */
       let n = o.countdown; ok.disabled = true; ok.textContent = (o.okText || '确定') + '(' + n + ')';
-      const iv = setInterval(() => { n--; if (n <= 0) { clearInterval(iv); ok.disabled = false; ok.textContent = o.okText || '确定' } else ok.textContent = (o.okText || '确定') + '(' + n + ')' }, 1000);
+      hsConfirmTimer = setInterval(() => { n--; if (n <= 0) { clearInterval(hsConfirmTimer); hsConfirmTimer = null; ok.disabled = false; ok.textContent = o.okText || '确定' } else ok.textContent = (o.okText || '确定') + '(' + n + ')' }, 1000);
     }
   });
 }
 let hsCfRes = null;
+let hsConfirmTimer = null; /* 审查P2-5: 倒计时竞态防护——入口/resolve 双向清理 */
 
 /* ================= 常驻卡 ================= */
 function renderCard() {
@@ -1889,15 +2418,26 @@ function renderCard() {
   const abn = !ST.running && ST.residue;
   let st, sub;
   if (ST.running) {
+    /* F01-R-007.A: 引擎进程在跑但 readiness 未就绪(采集成功但端口/鉴权未过)必须可读呈现,
+       不得只显示●运行中;口径与 engineStart 硬门槛一致(mixed/redir/dns+ctrl),已就绪时保持原展示不变 */
+    const miss = [];
+    if (!ST.listen.mixed) miss.push('混合');
+    if (!ST.listen.redir) miss.push('透明');
+    if (!ST.listen.dns) miss.push('DNS');
+    if (!ST.listen.ctrl) miss.push('控制');
     st = '<span style="color:#66bb6a">● 运行中</span>' + (C.ver ? ' v' + esc(C.ver) : '')
       + ((ST.upgradePending && ST.upgradePending.length) ? ' <span id="hs_upg_badge" class="hs-act warn" title="点击查看更新内容并升级">⬆️ 待升级 · 查看</span>' : '')
       + ((ST.downgraded && !(ST.upgradePending && ST.upgradePending.length)) ? ' <span class="hs-act warn" title="已回滚到旧版组件运行,新版本插件发布前不再提示升级">⬇️ 降级运行 ' + esc(C.upgBackup ? C.upgBackup.from : '?') + '</span>' : '');
     sub = '终端代理:' + s1Txt() + ' · 本机:' + (C.s2 ? '开' : '关');
+    if (miss.length) {
+      st = '<span style="color:#e57373">● 运行中·端口未就绪</span>' + (C.ver ? ' v' + esc(C.ver) : '');
+      sub = '端口未就绪(' + miss.join('/') + '),代理当前不可用;请刷新状态或跑诊断排查';
+    }
   } else if (abn) {
     st = '<span style="color:#e57373">● 异常:规则残留</span>';
     sub = '被接管设备可能断网,请还原或重启';
   } else {
-    st = '<span style="color:#9aa3b2">● 已停止</span>';
+    st = '<span style="color:#b3bdcb">● 已停止</span>';
     sub = ST.bin ? '引擎未运行,所有终端直连' : '内核未安装,请进 设置→安装与更新';
   }
   const mode = C.cardMode || 'full';
@@ -1909,7 +2449,7 @@ function renderCard() {
   } else if (mode === 'simple') {
     inner = '<div style="padding:6px 0">'
     + '<div style="display:flex;align-items:flex-start;gap:8px">'
-    + '<div style="flex:1;min-width:0;font-size:.78rem">' + st + ' <span style=\"font-size:.6rem;color:#9aa3b2\">小海关 v' + V + '</span><br><span style="font-size:.68rem;opacity:.75">' + esc(sub) + '</span></div>'
+    + '<div style="flex:1;min-width:0;font-size:.78rem">' + st + ' <span style=\"font-size:.6rem;color:#b3bdcb\">小海关 v' + V + '</span><br><span style="font-size:.68rem;opacity:.75">' + esc(sub) + '</span></div>'
     + '</div>'
     + '</div>';
     /* 简洁模式下整块可点直达配置 */
@@ -1935,7 +2475,7 @@ function renderCard() {
   }
   const title = mode === 'simple'
     ? ''
-    : '<div class="title" style="margin:6px 0"><strong>🛡️ 小海关</strong> <span style="font-size:.62rem;color:#9aa3b2;font-weight:400">v' + V + '</span>'
+    : '<div class="title" style="margin:6px 0"><strong>🛡️ 小海关</strong> <span style="font-size:.62rem;color:#b3bdcb;font-weight:400">v' + V + '</span>'
       + (mode === 'full' ? '<div style="display:inline-block" id="hs_collapse_btn"></div>' : '')
       + '</div>';
   box.innerHTML = title + inner;
@@ -1963,7 +2503,7 @@ function renderCard() {
   if (mode === 'simple') return;
   /* 完整模式: 面板原生折叠 + 按钮绑定 */
   try { if (typeof collapseGen === 'function') collapseGen('#hs_collapse_btn', '#hs_collapse', 'hs_collapse_state') } catch (e) { console.warn('[小海关] collapseGen:', e) }
-  const bind = (id, fn) => { const b = $('#' + id); if (b) { b.onclick = fn } else console.warn('[小海关] 按钮未找到:', id) };
+  const bind = (id, fn) => { const b = $('#' + id); if (b) { b.onclick = fn } else if (id !== 'hs_btn_start' && id !== 'hs_btn_stop') console.warn('[小海关] 按钮未找到:', id) }; /* v2.7.18: 启/停按钮至斥渲染,引擎运行时无启动钮=正常态,静默(用户实锤控制台刷屏) */
   const upgBadge = $('#hs_upg_badge'); if (upgBadge) upgBadge.onclick = () => showUpgradeCard(); /* 无待升级时徽标不存在,静默 */
   const gate = fn => () => { if (HS_UPGRADING) { upgShow('run'); return } fn() };
   /* 状态行整行可点开面板(配置按钮已并入面板页签) */
@@ -2021,8 +2561,8 @@ function buildModals() {
   $$('#hs_modal_mgr,#hs_modal_diag,#hs_modal_cf,#hs_modal_param,#hs_modal_simple').forEach(m => {
     m.addEventListener('click', e => { if (e.target === m) hsClose(m.id) });
   });
-  $('#hs_cf_ok').onclick = () => { mHide('hs_modal_cf'); if (hsCfRes) hsCfRes(true); hsCfRes = null };
-  $('#hs_cf_no').onclick = () => { mHide('hs_modal_cf'); if (hsCfRes) hsCfRes(false); hsCfRes = null };
+  $('#hs_cf_ok').onclick = () => { clearInterval(hsConfirmTimer); hsConfirmTimer = null; mHide('hs_modal_cf'); if (hsCfRes) hsCfRes(true); hsCfRes = null };
+  $('#hs_cf_no').onclick = () => { clearInterval(hsConfirmTimer); hsConfirmTimer = null; mHide('hs_modal_cf'); if (hsCfRes) hsCfRes(false); hsCfRes = null };
   $('#hs_pm_cancel').onclick = () => { mHide('hs_modal_param'); if (hsPmRes) hsPmRes(null); hsPmRes = null };
 }
 let hsPmRes = null;
@@ -2052,7 +2592,7 @@ async function refreshDevPaneInner() {
   const embed = hsTab !== 'dev';
   const pane = embed ? $('#hs_dev_pane') : $('#hs_mgr_pane');
   if (!pane) return;
-  pane.innerHTML = '<div style="text-align:center;padding:14px;color:#9aa3b2;font-size:.76rem">📡 采集设备中…</div>';
+  pane.innerHTML = '<div style="text-align:center;padding:14px;color:#b3bdcb;font-size:.76rem">📡 采集设备中…</div>';
   await collectDevices();
   const hd = '<div class="hs-pghead">'
   + '<div class="hs-seg" style="flex:1">'
@@ -2073,15 +2613,20 @@ async function refreshDevPaneInner() {
     const lineOpts = ['<option value="">跟随全局</option>']
       .concat((C.lines || []).map(L => '<option value="' + esc(L.id) + '"' + (d.line === L.id ? ' selected' : '') + '>' + esc(L.name) + '</option>'))
       .join('');
+    const pri = isPrivacyMac(d.mac);
+    const priBadge = pri ? ' <span title="隐私MAC:可能轮换,白名单勾选可能失效,建议关闭设备私有Wi-Fi地址" style="font-size:.72rem;color:#ffcc80">🔒</span>' : '';
     h += '<div class="hs-devrow' + (d.online === false ? ' off' : '') + '">'
     + '<div style="flex:1;min-width:0">'
-    + '<div class="hs-dev-name" data-rn="' + i + '" style="font-size:.82rem;font-weight:600;cursor:pointer">' + esc(d.name) + ' <span style="opacity:.5;font-size:.64rem">✏️</span></div>'
-    + '<div style="font-size:.7rem;color:#9aa3b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(d.ip) + ' · ' + esc(d.host || d.mac) + '</div>'
+    + '<div class="hs-dev-name" data-rn="' + i + '" style="font-size:.82rem;font-weight:600;cursor:pointer">' + esc(d.name) + priBadge + ' <span style="opacity:.5;font-size:.64rem">✏️</span></div>'
+    + '<div style="font-size:.7rem;color:#b3bdcb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(d.ip) + ' · ' + esc(d.host || d.mac) + '</div>'
     + '</div>'
     + '<select data-line="' + i + '" style="flex:none;max-width:96px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:6px;color:#e8eaf0;padding:3px 4px;font-size:.7rem">' + lineOpts + '</select>'
     + '<label class="hs-sw"><input type="checkbox" data-dev="' + i + '" ' + (d.proxy ? 'checked' : '') + '><span></span></label>'
+    + '<button class="btn hs-sm hs-dgr hs-btn-xs" data-devdel="' + i + '" title="移除设备(移除后不再自动发现,可在底部已忽略中恢复)" style="flex:none;padding:2px 6px;min-width:28px">✕</button>'
     + '</div>';
   });
+  const rmN = (Array.isArray(C.removedMacs) ? C.removedMacs : []).length;
+  if (rmN) h += '<div class="hs-hint" style="margin-top:4px;text-align:right"><span class="hs-act" id="hs_rm_mgr" style="font-size:.62rem">🚫 已忽略 ' + rmN + ' 台设备 · 管理</span></div>';
   h += '<div class="hs-hint" style="margin-top:6px">💡 名字与白名单按 MAC 记忆,IP 变了也跟着设备走;清空保存=恢复默认名;Esc=取消<br>⚠️ 手机请关闭私有Wi-Fi地址后用真实MAC勾选——隐私MAC会轮换,换一次白名单就失效一次</div>'
   + ((C.lines || []).length ? '<div class="hs-hint">🛤️ 线路给设备指定独立出口(在「🛤️ 线路」里定义);未指定=与全局一致。<br>💡 建议给指定线路的设备绑定固定 IP(路由器/面板 DHCP 静态租约),否则设备换 IP 后线路会短暂跟随失效(自动纠正,期间走全局线路)。<br>⚠️ 手机 IPv6 隐私地址定时轮换,轮换瞬间该设备的 v6 直连流量会短暂走全局线路(自动跟随,不影响使用;追求精确可关闭设备的随机 v6 地址)。</div>' : '<div class="hs-hint">🛤️ 需要不同设备走不同出口?点上方「🛤️ 线路」定义线路后,每台设备可单独指定。</div>');
   if (hsTab === 'dev') pane.innerHTML = hd + '<div class="hs-pgscroll">' + h + '</div>';
@@ -2101,6 +2646,21 @@ async function refreshDevPaneInner() {
     const ok = await op(null, async () => { d.proxy = cb.checked; await saveConf(); await reapplyFw(); await opLog('白名单' + (cb.checked ? '添加' : '移除') + ': ' + d.name + '(' + d.ip + ')') },
       '✅ ' + d.name + (cb.checked ? ' 已加入白名单' : ' 已移出白名单'));
     if (!ok) cb.checked = !cb.checked;
+  });
+  pane.querySelectorAll('[data-devdel]').forEach(btn => btn.onclick = async () => {
+    const d = C.devices[+btn.dataset.devdel]; if (!d) return;
+    const ok = await confirmBox({ title: '移除设备', html: '<div class="hs-hint">' + (d.proxy ? '<b style="color:#ffb3b3">该设备在白名单中——移除将同时取消其代理接管</b><br>' : '') + '将移除该设备并停止自动发现(其 MAC 进入忽略名单,不再因 ARP/DHCP 残留重新出现);白名单勾选与线路设置同步清除。误移可在设备页底部「已忽略设备」中恢复。</div><div style="margin-top:6px;font-size:.76rem">设备：' + esc(d.name || d.mac) + '<br>MAC：' + esc(d.mac || '—') + '</div>', okText: '移除', danger: true });
+    if (!ok) return;
+    const done = await op(btn, async () => {
+      const idx = C.devices.indexOf(d);
+      if (idx >= 0) C.devices.splice(idx, 1);
+      const macU = String(d.mac || '').toUpperCase();
+      if (macU && !C.removedMacs.some(x => x.mac === macU)) { C.removedMacs.push({ mac: macU, name: String(d.name || '').slice(0, 24), time: nowStr().slice(0, 16) }); if (C.removedMacs.length > 50) C.removedMacs.shift() } /* v2.7.0: 黑名单防 ARP/DHCP 残留复活(真机实测);v2.7.9 存名字 */
+      await saveConf();
+      await reapplyFw();
+      await opLog('移除设备:' + (d.name || d.mac || d.ip || '未知') + '(加入忽略名单)');
+    }, '✅ 已移除并停止自动发现');
+    if (done) refreshDevPane();
   });
   pane.querySelectorAll('[data-rn]').forEach(el => el.onclick = () => {
     const d = C.devices[+el.dataset.rn];
@@ -2126,12 +2686,39 @@ async function refreshDevPaneInner() {
       d.line = sl.value;
       await saveConf();
       await opLog('设备「' + d.name + '」线路→' + (d.line ? ((C.lines.filter(x => x.id === d.line)[0] || {}).name || d.line) : '跟随全局'));
-      if (await saveConfReload(null)) HS_LINE_SIG = lineSig(); /* 成功才置,失败留待重试 */
+      if (await saveConfReload(null)) { HS_LINE_SIG = lineSig(); await reapplyFw(); } /* 方案A热修: 热重载后同步重应用 fw——设备换线路即换 hs_wl_ 集合成员,不重应用则 fw 层静默失配(新增线路无链/删线残留旧链);reapplyFw 对未运行引擎安全(只重写烙印后 return) */
     }, '✅ 线路已' + (sl.value ? '指定' : '恢复跟随全局') + (ST.running ? '' : '(引擎未运行,下次启动生效)'));
     if (!okr) sl.value = d.line || ''; /* op 忙/失败时回滚下拉显示,防显示与数据不一致 */
   });
   const lmb = pane.querySelector('#hs_line_mgr'); if (lmb) lmb.onclick = () => openLineDlg();
-  $('#hs_dev_rf').onclick = refreshDevPane;
+  $('#hs_dev_rf').onclick = refreshDevPane; /* v2.9.2: 绑定曾错位在 openRemovedDlg 尾部(设备区渲染后从不执行=按钮死,用户实锤) */
+  const rmm = pane.querySelector('#hs_rm_mgr'); if (rmm) rmm.onclick = openRemovedDlg;
+}
+/* v2.7.0 已忽略设备管理: 列出移除黑名单(v2.7.9 显示设备名+MAC 双行,可辨认),逐台可恢复 */
+function openRemovedDlg() {
+  const list = (Array.isArray(C.removedMacs) ? C.removedMacs : []).slice();
+  let h = '<div class="hs-hint" style="margin-bottom:8px">以下设备已移除且不再自动发现;点「恢复」可重新纳入(设备需重新连上后才会出现在列表)</div>';
+  if (!list.length) h += '<div class="hs-hint" style="padding:12px;text-align:center">无已忽略设备</div>';
+  list.forEach((m, i) => {
+    const it = typeof m === 'string' ? { mac: m, name: '', time: '' } : m;
+    h += '<div class="hs-li" style="align-items:center;padding:6px 0"><div style="flex:1;min-width:0">'
+    + '<div style="font-size:.8rem;font-weight:600">' + esc(it.name || '未命名设备') + '</div>'
+    + '<div class="hs-hint" style="font-size:.66rem;font-family:monospace">' + esc(it.mac) + (it.time ? ' · ' + esc(it.time) + ' 忽略' : '') + '</div>'
+    + '</div>'
+    + '<button class="btn hs-sm" data-rmres="' + i + '">恢复</button></div>';
+  });
+  h += '<div class="hs-actions"><button class="btn" id="hs_rm_close">关闭</button></div>';
+  hsOpenSimple('🚫 已忽略设备', h);
+  const cl = document.getElementById('hs_rm_close'); if (cl) cl.onclick = () => hsClose('hs_modal_simple');
+  document.querySelectorAll('[data-rmres]').forEach(b => b.onclick = async () => {
+    const i = +b.dataset.rmres;
+    const it = typeof list[i] === 'string' ? { mac: list[i], name: '' } : list[i];
+    C.removedMacs.splice(i, 1);
+    await saveConf();
+    await opLog('恢复已忽略设备:' + (it.name || it.mac));
+    toast('✅ 已恢复「' + (it.name || it.mac) + '」,设备重新连上后将自动出现在列表', 'green');
+    openRemovedDlg(); refreshDevPane();
+  });
 }
 /* ================= 分设备线路管理弹窗 ================= */
 let LINE_NODES = null; /* 节点选项缓存(打开弹窗时懒加载) */
@@ -2282,7 +2869,7 @@ async function openLineDlg() {
     if (removedIds.length) C.devices.forEach(d => { if (removedIds.indexOf(d.line) >= 0) d.line = '' });
     await saveConf();
     await opLog('线路管理:保存 ' + C.lines.length + ' 条' + (removedIds.length ? ',删除 ' + removedIds.length + ' 条(相关设备恢复跟随全局)' : ''));
-    if (await saveConfReload(null)) HS_LINE_SIG = lineSig(); /* 热重载成功才置签名,失败留给下次 collectStatus 重试 */
+    if (await saveConfReload(null)) { HS_LINE_SIG = lineSig(); await reapplyFw(); } /* 方案A热修: 同设备换线路——线路增删改后 fw 层集合/链同步重建(含孤儿清理),不重应用则新增线路无 hs_wl_<newid>/删线残留 hs_wl_<oldid> 死端口黑洞 */
     /* 锁定类线路: 运行时显式切换组选择(store-selected 会记忆,但首次/default 不可靠);编码名失败回退原样名 */
     for (const L of C.lines) {
       const def = lineDefOf(L);
@@ -2317,7 +2904,7 @@ const HS_DELAY = {}; const HS_UDP_NODE = {}; let hsUdpRun = false;
    不含订阅节点(必 404 Resource not found);订阅节点测速必须走 /group/{组名}/delay——
    引擎内部并发测全组,一次返回 {节点名:延迟} 映射,结果缺项=不可用(小小猫同款方案) */
 async function groupDelay(u) {
-  const q = '/group/' + encodeURIComponent(hsCurGroup) + '/delay?timeout=5000&url=' + encodeURIComponent((u || 'http://www.gstatic.com/generate_204'));
+  const q = '/group/' + encodeURIComponent(hsCurGroup) + '/delay?timeout=5000&url=' + encodeURIComponent((u || 'https://www.gstatic.com/generate_204'));
   const r = await run('curl -s -m 25 -H "Authorization: Bearer ' + C.secret + '" ' + shq('http://127.0.0.1:' + C.ports.ctrl + q), 30000);
   try { const j = JSON.parse(r.content); if (j && typeof j === 'object' && !j.message) return j } catch (e) {}
   console.log('[小海关] 组测速失败:', (r.content || '').slice(0, 120));
@@ -2346,7 +2933,9 @@ async function switchMode(mode) {
   C.mode = mode; C.pausedAuto = false; await saveConf();
   if (!ST.running) { toast('模式已保存,下次启动生效', 'green'); return }
   const yaml = genConfigYaml();
-  await writeFile(CFG, yaml);
+  if (yaml === null) { toast('⚠️ 订阅解析失败,模式仅保存,未热重载(旧配置保留)', 'red'); return }
+  /* F13: 写盘失败不发起热重载(同 syncLineRules)——模式已保存,下次启动按新模式生成;也不平滑重启(重启也生成不了盘上配置) */
+  if (!(await writeFile(CFG, yaml))) { toast('❌ 配置写盘失败,模式已保存但未热重载(旧配置保留)', 'red'); await opLog('模式切换:写盘失败,跳过热重载(' + mode + ')'); return }
   const ok = await apiPut('/configs?force=true', { path: '', payload: yaml });
   if (ok) {
     toast('模式热重载:' + ({ auto: '自动选优', balance: '负载均衡', fallback: '故障转移', manual: '手动' })[mode], 'green');
@@ -2393,11 +2982,12 @@ async function getConnectionStats() {
   const byDev = Object.keys(grp).map(k => {
     const g = grp[k];
     const src0 = g.srcs[0];
-    let icon = '📱', name = src0 + '(未入库)';
+    let icon = '📱', name = src0 + '(未入库)', mac = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(k) ? k : '';
     if (k === 'localhost') { icon = '🖥️'; name = '设备本机' }
     else {
       const dv = (C.devices || []).find(x => x.mac && x.mac.toUpperCase() === k.toUpperCase()) || (C.devices || []).find(x => x.ip === src0);
-      if (dv) { icon = dv.proxy ? '📱' : '📵'; name = dv.name || dv.mac || src0 }
+      if (dv) { icon = dv.proxy ? devIconOf(dv.name, dv.host) : '📵'; name = dv.name || dv.mac || src0; mac = dv.mac || mac }
+      else icon = devIconOf(name, '');
     }
     g.conns.sort((a, b) => (b.up + b.dl) - (a.up + a.dl));
     /* v2.2.1: 同目标(host)聚合——网关层隧道场景(终端自带代理客户端时)一台设备可产生几十条同目标连接,
@@ -2405,7 +2995,7 @@ async function getConnectionStats() {
     const agg = {};
     g.conns.forEach(r => { const k = r.host; if (!agg[k]) agg[k] = { host: r.host, rule: r.rule, chain: r.chain, up: 0, dl: 0, n: 0 }; agg[k].up += r.up; agg[k].dl += r.dl; agg[k].n++ });
     const aggArr = Object.keys(agg).map(k => agg[k]).sort((a, b) => (b.up + b.dl) - (a.up + a.dl));
-    return { src: src0, icon: icon, name: name, up: g.up, dl: g.dl, conns: aggArr.slice(0, 8), total: g.conns.length };
+    return { src: src0, icon: icon, name: name, mac: mac, up: g.up, dl: g.dl, conns: aggArr.slice(0, 8), total: g.conns.length };
   }).sort((a, b) => (b.up + b.dl) - (a.up + a.dl));
   /* 未入库的 v6 源: ping 一次让内核邻居表学习到它的 MAC(隐私扩展无法从地址反推),
      不阻塞当前渲染,下次 collectStatus 后自动归并到设备行 */
@@ -2417,6 +3007,24 @@ async function getConnectionStats() {
   return { total: (d.connections || []).length, bySrc: bySrc, top: act.slice(0, 15), byDev: byDev };
 }
 const fmtB = n => n >= 1048576 ? (n / 1048576).toFixed(1) + 'MB' : n >= 1024 ? (n / 1024).toFixed(0) + 'KB' : n + 'B';
+/* 移动端适配: 从完整节点名提取地区摘要(两行式连接行第二行用) */
+const CHAIN_REGIONS = ['日本', '香港', '新加坡', '美国', '台湾', '韩国', '英国', '德国', '泰国', '越南', '菲律宾', '马来西亚', '印度', '土耳其', '阿根廷', '巴西', '加拿大', '澳大利亚', '俄罗斯', '法国', '荷兰', '意大利', '西班牙', '阿联酋'];
+function chainToShort(chain) {
+  const c = String(chain || '').trim();
+  if (!c || c === 'DIRECT') return { label: '直连', more: '' };
+  if (/剩余流量|到期|过期|官网|套餐|重置|流量[:：]|EXP/i.test(c)) return { label: 'ℹ️', more: '信息节点' };
+  /* 提取国旗 emoji(Unicode 区域指示符对) */
+  const flag = (c.match(/[\uD83C][\uDDE6-\uDDFF][\uD83C][\uDDE6-\uDDFF]/) || [''])[0];
+  /* 提取地区名 */
+  let region = '';
+  for (const r of CHAIN_REGIONS) { if (c.includes(r)) { region = r; break } }
+  if (!region) {
+    /* 未匹配关键词: 取第一个|前的文字截取前4字 */
+    const seg = c.split('|')[0].trim();
+    region = seg.length > 4 ? seg.slice(0, 4) : seg;
+  }
+  return { label: region + flag, more: c.split('|')[0].trim() };
+}
 async function refreshNodePane() {
   try {
   const pane = $('#hs_mgr_pane');
@@ -2485,14 +3093,11 @@ async function refreshNodePane() {
   h += '<div class="hs-hint" style="margin-top:4px;font-size:.66rem">👇 点节点胶囊即切换(亮框✓=当前选中);测速后按延迟选最快的用</div>';
   /* 订阅来源行(头部第三行): 本页节点来自当前生效订阅(多订阅不合并,切换订阅=重新生效配置) */
   const sb = C.subs[C.activeSub];
-  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;font-size:.68rem;margin-top:2px;color:#9aa3b2">'
+  h += '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline;font-size:.68rem;margin-top:2px;color:#b3bdcb">'
   + '<span>📄 <b style="color:#e8eaf0">' + esc(sb ? sb.name : '未启用订阅') + '</b>' + (sb && sb.time ? ' · 更新 ' + esc(sb.time.slice(5)) : '') + '</span>'
   + '<button class="btn hs-xs" id="hs_node_submgr" style="flex:none">管理订阅 ›</button>';
-  infoNodes.forEach(n => {
-    const parts = n.split(/[:：]/);
-    if (parts.length >= 2) h += '<span>' + esc(parts[0].trim()) + ': <b style="color:#7fc9f2">' + esc(parts.slice(1).join(':').trim()) + '</b></span>';
-    else h += '<span>' + esc(n) + '</span>';
-  });
+  /* v2.7.0: 订阅流量/到期信息不再在节点页显示(归订阅界面每卡独立显示;
+     融合后"显示哪个订阅的"有歧义,用户产品决策);info 节点本身仍被隐藏不逃逸到节点列表 */
   h += '</div>';
   /* === 节点列表(独立滚动块,不带动头部) === */
   pane.classList.add('hs-node-mode');
@@ -2508,7 +3113,7 @@ async function refreshNodePane() {
     + (name === g.now ? '<span style="color:#7fc9f2;font-size:.62rem;border:1px solid #7fc9f2;border-radius:4px;padding:0 4px;flex:none;margin-right:4px">当前</span>' : '')
     + '<button class="hs-lat-btn" data-test="' + esc(name) + '" style="padding:2px 8px;font-size:.66rem;flex:none;margin-right:4px">测</button>'
     + '<span class="hs-lat" style="color:' + (cls === 'g' ? '#66bb6a' : cls === 'y' ? '#ffb74d' : cls === 'r' ? '#e57373' : '#5b6270') + ';font-size:.7rem;flex:none;min-width:40px;text-align:right">' + (last ? last + 'ms' : '—') + '</span>'
-    + (hsUdpRun && HS_UDP_NODE[name] !== undefined ? (HS_UDP_NODE[name] > 0 ? '<span class="hs-udp" style="color:#66bb6a;font-size:.66rem;flex:none;min-width:22px;text-align:right">U✓</span>' : '<span class="hs-udp" style="color:#5b6270;font-size:.66rem;flex:none;min-width:22px;text-align:right">U✗</span>') : '<span class="hs-udp" style="flex:none;min-width:0"></span>')
+    + (hsUdpRun && HS_UDP_NODE[name] !== undefined ? (HS_UDP_NODE[name] > 0 ? '<span class="hs-udp" style="color:#66bb6a;font-size:.66rem;flex:none;min-width:22px;text-align:right" title="UDP 实测通过(tunnels 真实转发往返)">U✓</span>' : '<span class="hs-udp" style="color:#e57373;font-size:.66rem;flex:none;min-width:22px;text-align:right" title="UDP 实测不通(该节点不转发UDP)">U✗</span>') : ((pr && pr.udp) ? '<span class="hs-udp" style="color:#7fc9f2;font-size:.66rem;flex:none;min-width:22px;text-align:right;opacity:.65" title="订阅声明支持UDP(未实测)——点上方🛰️测UDP做真实实测">U</span>' : '<span class="hs-udp" style="flex:none;min-width:0"></span>'))
     + '</div>';
   });
   h += '</div></div>';
@@ -2535,8 +3140,9 @@ async function refreshNodePane() {
     if (!settable) {
       target = '🚀 节点选择';
       C.mode = 'manual'; C.pausedAuto = true; await saveConf();
-      const yml = genConfigYaml(); await writeFile(CFG, yml);
-      await apiPut('/configs?force=true', { path: '', payload: yml });
+      const yml = genConfigYaml();
+      if (yml === null) { toast('⚠️ 订阅解析失败,跳过配置兜底重写(旧配置保留)', 'red') }
+      else { await writeFile(CFG, yml); await apiPut('/configs?force=true', { path: '', payload: yml }); }
       await wait(500);
     }
     let ok = await apiPut('/proxies/' + encodeURIComponent(target), { name: r.dataset.node });
@@ -2552,7 +3158,7 @@ async function refreshNodePane() {
     realNodes.forEach(n => {
       const row = pane.querySelector('[data-node="' + CSS.escape(n) + '"]');
       const el = row ? row.querySelector('.hs-lat') : null;
-      if (el) { el.textContent = '…'; el.style.color = '#9aa3b2'; el.title = '' }
+      if (el) { el.textContent = '…'; el.style.color = '#b3bdcb'; el.title = '' }
     });
     const map = await groupDelay();
     applyDelayMap(map, realNodes);
@@ -2560,24 +3166,29 @@ async function refreshNodePane() {
     toast(map ? '✅ 组测速完成(' + realNodes.length + ' 节点,引擎并发)' : '❌ 组测速失败(详见控制台)', map ? 'green' : 'red');
   };
   $('#hs_node_rf').onclick = refreshNodePane;
-  /* 延迟测速诊断: 直连 9090 测两个不同 URL + mihomo/系统资源 + OUTPUT 链,结果替换列表区 */
+  /* v2.7.0 🛰️测UDP 重写: 旧版 groupDelay('udp://8.8.8.8:53') 从未生效(引擎仅认 http/https,
+     源码实证)恒报全组 U✗ 误导;改为 tunnels 临时隧道对当前选中节点做真实 UDP 往返实测
+     (注入→DNS 探测→恢复,内存热重载不动盘上配置),结果写 HS_UDP_NODE 胶囊实时更新 */
   const udpBtn = $('#hs_node_udp');
   if (udpBtn) udpBtn.onclick = async () => {
     if (udpBtn.disabled) return;
-    udpBtn.disabled = true; udpBtn.textContent = '⏳ 检测中…';
-    /* 组端点对全体成员并发发 udp DNS 探测,应答的进 map——未应答=UDP 不通(封53或无UDP) */
-    const map = await groupDelay('udp://8.8.8.8:53');
-    if (map) {
-      realNodes.forEach(n => { HS_UDP_NODE[n] = map[n] || 0 });
-      hsUdpRun = true;
-      let ok = 0; realNodes.forEach(n => { if (HS_UDP_NODE[n] > 0) ok++ });
-      toast('UDP 可用 ' + ok + '/' + realNodes.length + '(U✓=游戏语音可选;U✗可能是封UDP:53惯例)', 'green');
-      opLog('节点UDP检测(组' + hsCurGroup + '):可用 ' + ok + '/' + realNodes.length);
-      realNodes.forEach(n => {
-        const el = pane.querySelector('[data-node="' + CSS.escape(n) + '"] .hs-udp');
-        if (el) { const d = HS_UDP_NODE[n]; el.textContent = d > 0 ? 'U✓' : 'U✗'; el.style.color = d > 0 ? '#66bb6a' : '#5b6270'; el.style.minWidth = '22px'; el.style.textAlign = 'right' }
-      });
-    } else { toast('UDP 检测失败(控制接口无响应)', 'red') }
+    const cur = g.now || realNodes[0];
+    if (!cur) { toast('无节点可测', 'pink'); return }
+    udpBtn.disabled = true; udpBtn.textContent = '⏳ 实测中…';
+    const r = await probeUdpViaTunnel(cur);
+    if (r.why) toast('❌ ' + r.why, 'red');
+    else {
+      HS_UDP_NODE[cur] = r.ok ? 1 : 0; hsUdpRun = true;
+      const el = pane.querySelector('[data-node="' + CSS.escape(cur) + '"] .hs-udp');
+      if (el) {
+        el.textContent = r.ok ? 'U✓' : 'U✗';
+        el.style.color = r.ok ? '#66bb6a' : '#e57373';
+        el.style.minWidth = '22px'; el.style.textAlign = 'right';
+        el.removeAttribute('title');
+      }
+      toast(r.ok ? '✅ 「' + cur + '」UDP 实测通过(DNS 经隧道真实往返)' : '❌ 「' + cur + '」UDP 不通(该节点不转发游戏类 UDP)', r.ok ? 'green' : 'red', 4500);
+      await opLog('UDP实测(tunnels)「' + cur + '」: ' + (r.ok ? '通过' : '不通'));
+    }
     udpBtn.disabled = false; udpBtn.textContent = '🛰️ 测UDP';
   };
   /* 打开节点页静默触发一次组测速(60s 冷却防频繁刷新),延迟数字自动浮现 */
@@ -2634,6 +3245,86 @@ function proxyModeTxt() {
   return ({ off: '未接管 · 全部直连', all: '透明接管 · 全部终端', white: '透明接管 · 白名单(' + C.devices.filter(d => d.proxy).length + ' 台)' })[C.s1]
     + (C.s2 ? ' · 本机走代理' : '') + ' · 手动口 ' + C.ports.mixed;
 }
+/* v2.7.24 总览页接入设备区独立渲染: ⟳局部刷新只换本区容器,不整页重渲染(用户定调);
+   空态返回空串(引擎停/无连接时容器置空) */
+function ovDevSecHtml(cs) {
+  if (!(ST.running && cs && cs.byDev && cs.byDev.length)) return '';
+  return '<div class="hs-sec"><h4>接入设备 <span class="hs-hint">按流量排序 · 点击展开活动连接</span><span class="hs-act" id="hs_dev_rf" style="margin-left:auto" title="重新采集设备与活动连接(仅刷新本区)">⟳</span></h4>'
+    + cs.byDev.map((dv, i) =>
+        '<div style="margin-bottom:6px">'
+        + '<div class="hs-dev-hd" data-dev="' + i + '" style="display:flex;gap:6px;align-items:baseline;cursor:pointer;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:6px 10px">'
+        + '<span style="flex:none">' + dv.icon + '</span>'
+        + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:.8rem">' + esc(dv.name) + (isPrivacyMac(dv.mac) ? ' <span title="隐私MAC:可能轮换,白名单勾选可能失效,建议关闭设备私有Wi-Fi地址" style="font-size:.72rem;color:#ffcc80">🔒</span>' : '') + '</span>'
+        + '<span class="hs-hint" style="flex:none">' + dv.total + '条</span>'
+        + '<span class="hs-hint" style="flex:none;min-width:78px;text-align:right">↓' + fmtB(dv.dl) + ' ↑' + fmtB(dv.up) + '</span>'
+        + '<span style="flex:none;font-size:.7rem;color:#b3bdcb;transition:transform .2s">▸</span>'
+        + '</div>'
+        + '<div class="hs-dev-cons" style="display:none;padding:4px 4px 2px 10px">'
+        + '<div class="hs-hint" style="padding:2px 6px 4px;font-size:.64rem">目标=网关实际去向;终端若自带代理客户端,这里只能看到其隧道目标(如机场入口域名),真实访问的网站在它的内层</div>'
+        + dv.conns.map((t, ci) => {
+          const short = chainToShort(t.chain);
+          const inForce = (C.force || []).some(x => x && x.v === t.host);
+          const inExcl = (C.exclude || []).some(x => x && x.v === t.host);
+          const isIP = /^\d+\.\d+\.\d+\.\d+$/.test(t.host) || t.host.includes(':');
+          return '<div class="hs-li" style="padding:4px 6px">'
+          + '<div data-connmore="' + ci + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.72rem;cursor:pointer">' + esc(t.host) + (t.n > 1 ? ' <span class="hs-hint">×' + t.n + '条</span>' : '') + '</div>'
+          + '<div data-connmore="' + ci + '" style="display:flex;align-items:center;gap:6px;margin-top:2px;cursor:pointer">'
+          + '<span style="flex:none;font-size:.66rem;color:' + (t.chain === 'DIRECT' ? '#66bb6a' : '#7fc9f2') + '">' + esc(short.label) + '</span>'
+          + '<span class="hs-hint" style="flex:1;font-size:.64rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + short.more + '</span>'
+          + '<span class="hs-hint" style="flex:none;font-size:.66rem">' + fmtB(t.dl) + '</span>'
+          + '<span style="flex:none;font-size:.6rem;color:#b3bdcb;transition:transform .15s">▸</span>'
+          + '</div>'
+          + '<div data-connfull="' + ci + '" style="display:none;padding:4px 6px;margin-top:3px;background:rgba(79,140,255,.06);border-left:2px solid rgba(79,140,255,.3);border-radius:0 6px 6px 0;font-size:.66rem">'
+          + '<div class="hs-hint">节点: ' + esc(t.chain || '—') + '</div>'
+          + '<div class="hs-hint">规则: ' + esc(t.rule || '—') + '</div>'
+          + '<div class="hs-hint">↑' + fmtB(t.up) + ' ↓' + fmtB(t.dl) + '</div>'
+          + '<div style="display:flex;gap:6px;margin-top:6px">'
+          + '<button class="btn hs-sm hs-act" data-connforce="' + ci + '" data-host="' + esc(t.host) + '" data-isip="' + isIP + '"' + (inForce ? ' disabled' : '') + '>' + (inForce ? '✅ 已设置' : '🛫 走代理') + '</button>'
+          + '<button class="btn hs-sm hs-act" style="border-color:rgba(102,187,106,.55);background:rgba(102,187,106,.10);color:#8fe39a" data-connexcl="' + ci + '" data-host="' + esc(t.host) + '" data-isip="' + isIP + '"' + (inExcl ? ' disabled' : '') + '>' + (inExcl ? '✅ 已设置' : '⚡ 走直连') + '</button>'
+          + '</div>'
+          + '</div></div>';
+        }).join('')
+        + '</div></div>').join('')
+      + '</div>';
+}
+/* 设备区事件绑定(可重入: 整页渲染后与⟳局部刷新后各调一次) */
+function bindOvDev(scope) {
+  scope.querySelectorAll('.hs-dev-hd').forEach(hd => hd.onclick = () => {
+    const cons = hd.parentElement && hd.parentElement.querySelector('.hs-dev-cons');
+    const chev = hd.querySelector(':scope > span:last-child'); /* v2.8.4: 直接子级箭头——隐私徽章是名字span内嵌span,此前误选到徽章不旋转 */
+    if (!cons) return;
+    const open = cons.style.display !== 'none';
+    cons.style.display = open ? 'none' : 'block';
+    if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+  });
+  scope.querySelectorAll('[data-connmore]').forEach(el => el.onclick = (e) => {
+    if (e.target.closest('button')) return;
+    const full = el.parentElement.querySelector('[data-connfull]');
+    const chev = el.querySelector(':scope > span:last-child');
+    if (!full) return;
+    const open = full.style.display !== 'none';
+    full.style.display = open ? 'none' : 'block';
+    if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
+  });
+  const connQuickAdd = async (btn, list, label) => {
+    if (btn.disabled) return;
+    const host = btn.dataset.host || '';
+    const isIP = btn.dataset.isip === 'true';
+    const entry = isIP
+      ? { m: 'cidr', v: host.includes(':') ? host + '/128' : host + '/32' }
+      : { m: 'suffix', v: host };
+    C[list] = C[list] || [];
+    if (C[list].some(x => x && x.v === entry.v)) { toast('已设为' + label + ': ' + host, 'green'); return }
+    C[list].push(entry);
+    await saveConf();
+    if (ST.running) { await applyWithTxn(label + '「' + host + '」'); }
+    else { toast('已设为' + label + ': ' + host + '(引擎未运行,下次启动生效)', 'green'); return }
+    toast('已设为' + label + ': ' + host, 'green');
+    btn.textContent = '✅ 已设置'; btn.disabled = true;
+  };
+  scope.querySelectorAll('[data-connforce]').forEach(b => b.onclick = () => connQuickAdd(b, 'force', '走代理'));
+  scope.querySelectorAll('[data-connexcl]').forEach(b => b.onclick = () => connQuickAdd(b, 'exclude', '走直连'));
+}
 /* ---- 总览 ---- */
 async function paneOv() {
   let cs = null;
@@ -2651,32 +3342,11 @@ async function paneOv() {
       + '<div style="margin-top:4px"><button class="btn hs-sm hs-dgr" id="hs_upg_rollback">↩️ 回滚到 ' + esc(C.upgBackup.from) + '</button></div></div>'
     : '')
   + '<div class="hs-sec"><h4>当前状态</h4>'
-  + '<div class="hs-li">' + (ST.running ? '<span style="color:#66bb6a">● 运行中</span>' + (C.ver ? ' · v' + esc(C.ver) : '') + (ST.kb ? ' · ' + (ST.kb / 1024).toFixed(1) + 'MB 目录' : '') : (ST.residue ? '<span style="color:#e57373">● 异常:规则残留</span>' : '<span style="color:#9aa3b2">● 已停止</span>')) + '</div>'
+  + '<div class="hs-li">' + (ST.running ? '<span style="color:#66bb6a">● 运行中</span>' + (C.ver ? ' · v' + esc(C.ver) : '') + (ST.rss ? ' · 内存 ' + (ST.rss / 1024).toFixed(0) + ' MB' : '') + (ST.conn ? ' · 连接 ' + ST.conn + ' 条' : '') + (ST.kb ? ' · ' + (ST.kb / 1024).toFixed(1) + 'MB 目录' : '') : (ST.residue ? '<span style="color:#e57373">● 异常:规则残留</span>' : '<span style="color:#b3bdcb">● 已停止</span>')) + '</div>'
   + '<div class="hs-li">代理方式:' + esc(proxyModeTxt()) + '</div>'
   + '<div class="hs-li">节点模式:' + (ST.running ? esc(({ auto: '♻️ 自动选优', balance: '⚖️ 负载均衡', fallback: '🪜 故障转移', manual: '✋ 手动锁定' })[C.mode] || '—') + (C.pausedAuto ? '(已暂停→手动)' : '') : '—') + '</div>'
   + '</div>'
-  + (ST.running && cs && cs.byDev && cs.byDev.length
-    ? '<div class="hs-sec"><h4>接入设备 <span class="hs-hint">按流量排序 · 点击展开活动连接</span><span class="hs-act" id="hs_dev_rf" style="margin-left:auto" title="重新采集设备与活动连接(不做实时刷新,手动或切换页签时更新)">⟳</span></h4>'
-      + cs.byDev.map((dv, i) =>
-        '<div style="margin-bottom:6px">'
-        + '<div class="hs-dev-hd" data-dev="' + i + '" style="display:flex;gap:6px;align-items:baseline;cursor:pointer;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.06);border-radius:8px;padding:6px 10px">'
-        + '<span style="flex:none">' + dv.icon + '</span>'
-        + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:.8rem">' + esc(dv.name) + '</span>'
-        + '<span class="hs-hint" style="flex:none">' + dv.total + '条</span>'
-        + '<span class="hs-hint" style="flex:none;min-width:78px;text-align:right">↓' + fmtB(dv.dl) + ' ↑' + fmtB(dv.up) + '</span>'
-        + '<span style="flex:none;font-size:.7rem;color:#9aa3b2;transition:transform .2s">▸</span>'
-        + '</div>'
-        + '<div class="hs-dev-cons" style="display:none;padding:4px 4px 2px 10px">'
-        + '<div class="hs-hint" style="padding:2px 6px 4px;font-size:.64rem">目标=网关实际去向;终端若自带代理客户端,这里只能看到其隧道目标(如机场入口域名),真实访问的网站在它的内层</div>'
-        + dv.conns.map(t => '<div class="hs-li" style="display:flex;gap:6px;align-items:baseline;overflow:hidden;padding:5px 6px">'
-          + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.host) + (t.n > 1 ? ' <span class="hs-hint">×' + t.n + '条</span>' : '') + '</span>'
-          + '<span class="hs-hint" style="flex:none;max-width:36%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(t.rule || '—') + '</span>'
-          + '<span style="flex:none;font-size:.66rem;color:' + (t.chain === 'DIRECT' ? '#66bb6a' : '#7fc9f2') + '">' + (t.chain === 'DIRECT' ? '直连' : /剩余流量|到期|过期|官网|套餐|重置|流量[:：]|EXP/i.test(t.chain || '') ? 'ℹ️ 信息节点' : esc(t.chain)) + '</span>'
-          + '<span class="hs-hint" style="flex:none;min-width:64px;text-align:right">↓' + fmtB(t.dl) + ' ↑' + fmtB(t.up) + '</span>'
-          + '</div>').join('')
-        + '</div></div>').join('')
-      + '</div>'
-    : '')
+  + '<div id="hs_ov_dev">' + ovDevSecHtml(cs) + '</div>'
   + '<div class="hs-sec"><h4>开关</h4>'
   + '<div class="hs-row"><div class="hs-sl"><div class="hs-st">终端代理</div><div class="hs-sd">连上这台设备的手机电脑,勾选的自动走代理</div></div>'
   + '<div class="hs-sc"><div class="hs-seg" id="hs_seg_s1">'
@@ -2696,7 +3366,7 @@ async function paneOv() {
   + '</div>'
   /* v2.1.9: 状态页尾部新手引导条(用户反馈:标题行孤立图标不自达意)——原生 btn 样式,文字自明 */
   + '<div style="margin:10px 2px 2px;padding:10px 12px;border:1px dashed rgba(127,201,242,.28);border-radius:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-  + '<span style="font-size:.72rem;color:#9aa3b2">❓ 第一次使用小海关?</span>'
+  + '<span style="font-size:.72rem;color:#b3bdcb">❓ 第一次使用小海关?</span>'
   + '<button class="btn hs-sm" id="hs_ov_guide" style="margin-left:auto">📖 图文使用说明</button>'
   + '</div>';
 }
@@ -2746,7 +3416,8 @@ function nodeToYaml(n) {
   const L = [];
   L.push('  - name: ' + yamlEsc(n.name));
   L.push('    type: ' + n.type);
-  L.push('    server: ' + n.server);
+  /* I04: server 同样经 yamlEsc——此前裸拼,VMess add 字段含换行即破坏 YAML 结构(注入面与 name 齐平) */
+  L.push('    server: ' + yamlEsc(n.server));
   L.push('    port: ' + n.port);
   ['cipher', 'password', 'uuid', 'alterId', 'tls', 'servername', 'sni', 'network', 'skip-cert-verify', 'udp'].forEach(k => {
     if (n[k] === undefined) return;
@@ -2807,7 +3478,9 @@ async function saveManual(text) {
 async function saveConfReload(msg) {
   if (msg) toast(msg, 'green');
   if (ST.running) {
+    await refreshSubRaw(); /* v2.7.0: 融合预热(幂等,缓存命中零开销)——防各链路直达此处时原文缓存缺失 */
     const yaml = genConfigYaml();
+    if (yaml === null) { toast('⚠️ 订阅解析失败,未热重载(旧配置保留)', 'red'); await opLog('保存后热重载:订阅解析失败,跳过(旧配置保留)'); return false }
     await writeFile(CFG, yaml);
     const ok = await apiPut('/configs?force=true', { path: '', payload: yaml });
     if (!ok) { toast('热重载失败,重启引擎后生效', 'pink'); opLog('热重载失败(引擎运行中,重启后生效)'); return false }
@@ -2816,27 +3489,15 @@ async function saveConfReload(msg) {
   return false;
 }
 /* 添加节点弹窗(纯添加,无管理功能) */
-function openAddNodeDlg() {
-  try {
-  hsOpenSimple('➕ 添加节点',
-    '<textarea id="hs_manual_ta" placeholder="每行一个节点链接(ss:// vmess:// trojan://)；\n或粘贴 YAML 片段(proxies: 开头,适用全协议)\n保存后自动并入节点组" style="width:100%;height:34vh;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#e8eaf0;padding:8px;font-size:.72rem;font-family:Menlo,Consolas,monospace;resize:vertical;box-sizing:border-box"></textarea>'
-    + '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn hs-pri" id="hs_manual_save">保存并生效</button></div>');
-  $('#hs_manual_save').onclick = async () => {
-    const btn = $('#hs_manual_save');
-    btn.disabled = true; btn.textContent = '保存中…';
-    const ok = await saveManual($('#hs_manual_ta').value);
-    if (ok) { mHide('hs_modal_simple'); renderPane() } else { btn.disabled = false; btn.textContent = '保存并生效' }
-  };
-  } catch (e) { toast('添加节点弹窗异常:' + esc(String((e && e.message) || e).slice(0, 60)), 'red'); console.error('[小海关] openAddNodeDlg:', e) }
-}
-/* 手动节点管理弹窗 */
+/* openAddNodeDlg 已删除(v2.7.11): 与手动节点弹窗功能重复,合并单入口「🔧 自建节点」 */
+/* 自建节点管理弹窗(添加+编辑+清空一体) */
 function openManualDlg() {
   try {
   console.log('[小海关] 打开手动节点弹窗, 当前节点数:', HS_MANUAL.length);
   const list = HS_MANUAL.length
     ? '<div class="hs-hint" style="margin-bottom:6px">当前 ' + HS_MANUAL.length + ' 个: ' + HS_MANUAL.slice(0, 8).map(esc).join(' / ') + (HS_MANUAL.length > 8 ? ' …' : '') + '</div>'
     : '<div class="hs-hint" style="margin-bottom:6px">当前无手动节点</div>';
-  hsOpenSimple('✏️ 手动节点',
+  hsOpenSimple('🔧 自建节点',
     list
     + '<textarea id="hs_manual_ta" placeholder="每行一个节点链接(ss:// vmess:// trojan://)；\n或粘贴 YAML 片段(proxies: 开头,适用全协议)\n保存后自动并入节点组" style="width:100%;height:34vh;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#e8eaf0;padding:8px;font-size:.72rem;font-family:Menlo,Consolas,monospace;resize:vertical;box-sizing:border-box"></textarea>'
     + '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn hs-pri" id="hs_manual_save">保存并生效</button><button class="btn hs-dgr" id="hs_manual_clear">清空全部</button></div>');
@@ -2853,34 +3514,78 @@ function openManualDlg() {
   } catch (e) { toast('手动节点弹窗异常:' + esc(String((e && e.message) || e).slice(0, 60)), 'red'); console.error('[小海关] openManualDlg:', e) }
 }
 /* 订阅信息(余量/到期,从 provider 文件的 info 节点名解析;异步刷新后重绘) */
+/* 流量展示(v2.7.13): 所有档位统一两位小数去尾零,仅数值过大才换算单位(用户定调) */
+function humanGB(gb) {
+  if (!gb || gb <= 0 || !isFinite(gb)) return '';
+  const fmt = v => { const s = v.toFixed(2); return s.replace(/\.?0+$/, '') };
+  if (gb >= 1024) return fmt(gb / 1024) + ' TB';
+  if (gb >= 1) return fmt(gb) + ' GB';
+  return fmt(gb * 1024) + ' MB';
+}
 async function refreshSubInfo() {
-  if (C.activeSub < 0 || !C.subs[C.activeSub]) { HS_SUBINFO = undefined; return }
-  /* 本地优先: grep 只取 info 行(provider 文件可达数百 KB,readFile 全量 base64 会被面板输出截断;含 URL 编码形态) */
-  const F = shq(DIR + '/providers/sub' + C.activeSub + '.yaml');
-  const gr = await run("grep -aoE .{0,8}(\u5269\u4f59\u6d41\u91cf|%E5%89%A9%E4%BD%99%E6%B5%81%E9%87%8F).{0,40} " + F + " 2>/dev/null | head -2; "
-    + "grep -aoE .{0,8}(\u5957\u9910\u5230\u671f|%E5%A5%97%E9%A4%90%E5%88%B0%E6%9C%9F).{0,40} " + F + " 2>/dev/null | head -2", 12000);
-  if (gr.success && (gr.content || '').trim()) {
-    let txt = gr.content;
-    try { const dec = decodeURIComponent(txt); if (dec !== txt) txt = dec + '\n' + txt } catch (e) { }
-    const m1 = txt.match(/剩余流量[：:]\s*([0-9.]+\s*[TGGM]?B)/);
-    const m2 = txt.match(/套餐到期[：:]\s*([^\s"'}]+)/);
-    if (m1 || m2) { HS_SUBINFO = { left: m1 ? m1[1] : '', expire: m2 ? m2[1] : '' }; return }
+  /* v2.7.0: 全订阅信息(Clash Verge 式订阅卡流量/到期)——每个订阅独立解析显示在订阅界面,
+   节点页不再展示(融合后"显示哪个订阅的"有歧义,用户产品决策);
+   解析源=各订阅 provider 文件 info 节点(grep 局部行,防大文件全量回传截断),
+   激活订阅另走 /proxies 兜底(引擎明文节点名);输出 =Si= 分段标记 */
+  if (!C.subs.length) { HS_SUBINFO_ALL = undefined; return }
+  let cmd = '';
+  C.subs.forEach((sb, i) => {
+    if (!sb || !sb.url) return;
+    const F = shq(DIR + '/providers/sub' + i + '.yaml');
+    cmd += 'echo =S' + i + '=; '
+      + "grep -aoE .{0,8}(\u5269\u4f59\u6d41\u91cf|\u6d41\u91cf[:：]|%E5%89%A9%E4%BD%99%E6%B5%81%E9%87%8F).{0,44} " + F + " 2>/dev/null | head -3; "
+      + "grep -aoE .{0,8}(\u5957\u9910\u5230\u671f|\u5230\u671f\u65f6\u95f4|\u957f\u671f|\u6c38\u4e45|%E5%A5%97%E9%A4%90%E5%88%B0%E6%9C%9F).{0,44} " + F + " 2>/dev/null | head -3; "
+      + 'echo =N' + i + "=$(grep -cE '^ *- *\\{? *name:' " + F + ' 2>/dev/null); ';
+  });
+  const parseFlow = s => { const m = /([0-9.]+)\s*(TB|GB|MB|KB)/i.exec(String(s || '')); if (!m) return null; const v = parseFloat(m[1]); if (isNaN(v)) return null; const u = m[2].toUpperCase(); return { gb: u === 'TB' ? v * 1024 : u === 'GB' ? v : u === 'MB' ? v / 1024 : v / 1048576, raw: v + ' ' + u } };
+  const out = {};
+  if (cmd) {
+    const gr = await run(cmd, 15000);
+    let cur = -1;
+    String(gr.content || '').split('\n').forEach(l => {
+      const mk = /^=S(\d+)=$/.exec(l.trim());
+      if (mk) { cur = +mk[1]; out[cur] = { left: '', expire: '', usedGB: 0, totalGB: 0, days: null, forever: false, nodes: null }; return }
+      const nk = /^=N(\d+)=(\d+)$/.exec(l.trim());
+      if (nk) { if (out[+nk[1]]) out[+nk[1]].nodes = +nk[2]; return }
+      if (cur < 0) return;
+      let txt = l;
+      try { const dec = decodeURIComponent(txt); if (dec !== txt) txt = dec + '\n' + txt } catch (e) { }
+      const e0 = out[cur] || (out[cur] = { left: '', expire: '', usedGB: 0, totalGB: 0, days: null, forever: false });
+      const m1 = txt.match(/剩余流量[：:]\s*([0-9.]+\s*[TGGM]?B?)/);
+      const m2 = txt.match(/(?:套餐到期|到期时间|expire)[：:]\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+      /* 流量: 9550GB / 10000GB 或 流量：9550 GB|10000 GB(已用/总量形态) */
+      const m3 = txt.match(/流量[：:]\s*([0-9.]+\s*[TGGM]?B)\s*[/|]\s*([0-9.]+\s*[TGGM]?B)/);
+      if (/长期|永久/.test(txt)) e0.forever = true;
+      if (m1 && !e0.left) { const pf = parseFlow(m1[1]); e0.left = pf ? pf.raw : m1[1]; if (pf) { e0.leftGB = pf.gb } }
+      if (m3) { const pu = parseFlow(m3[1]); const pt = parseFlow(m3[2]); if (pu) { e0.usedGB = pu.gb; e0.usedTxt = pu.raw } if (pt) { e0.totalGB = pt.gb; e0.totalTxt = pt.raw } }
+      if (m2 && !e0.expire) {
+        e0.expire = m2[1];
+        const ts = new Date(m2[1] + 'T23:59:59');
+        if (!isNaN(ts)) e0.days = Math.ceil((ts - Date.now()) / 86400000);
+      }
+    });
   }
-  /* 兜底: 9090 /proxies 明文节点名 */
-  if (ST.running) {
+  /* 激活订阅 /proxies 兜底(引擎明文节点名,文件里 grep 不到时) */
+  if (ST.running && C.activeSub >= 0 && C.subs[C.activeSub] && out[C.activeSub] && !out[C.activeSub].left && !out[C.activeSub].expire) {
     const d = await apiGet('/proxies');
     if (d && d.proxies) {
       for (const k of Object.keys(d.proxies)) {
-        if (/剩余流量|套餐到期/.test(k)) {
+        if (/剩余流量|套餐到期|到期时间|流量[:：]/.test(k)) {
           const m1 = k.match(/剩余流量[：:]\s*([0-9.]+\s*[TGGM]?B)/);
-          const m2 = k.match(/套餐到期[：:]\s*([^\s"']+)/);
-          HS_SUBINFO = (m1 || m2) ? { left: m1 ? m1[1] : '', expire: m2 ? m2[1] : '' } : null;
-          return;
+          const m2 = k.match(/(?:套餐到期|到期时间|expire)[：:]\s*([0-9]{4}-[0-9]{2}-[0-9]{2})/i);
+          const m3 = k.match(/流量[：:]\s*([0-9.]+\s*[TGGM]?B)\s*[/|]\s*([0-9.]+\s*[TGGM]?B)/);
+          const cur0 = out[C.activeSub] || (out[C.activeSub] = { left: '', expire: '', usedGB: 0, totalGB: 0, days: null, forever: false });
+          if (m1 && !cur0.left) { const pf = parseFlow(m1[1]); cur0.left = pf ? pf.raw : m1[1]; if (pf) cur0.leftGB = pf.gb }
+          if (m3) { const pu = parseFlow(m3[1]); const pt = parseFlow(m3[2]); if (pu) { cur0.usedGB = pu.gb; cur0.usedTxt = pu.raw } if (pt) { cur0.totalGB = pt.gb; cur0.totalTxt = pt.raw } }
+          if (m2 && !cur0.expire) { cur0.expire = m2[1]; const ts = new Date(m2[1] + 'T23:59:59'); if (!isNaN(ts)) cur0.days = Math.ceil((ts - Date.now()) / 86400000) }
+          if (/长期|永久/.test(k)) cur0.forever = true;
+          if (m1 || m2 || m3) break;
         }
       }
     }
   }
-  HS_SUBINFO = null;
+  Object.keys(out).forEach(i => { const e = out[i]; if (!e.left && !e.expire && !e.totalGB && !e.forever) delete out[i] }); /* 无任何信息订阅不存 */
+  HS_SUBINFO_ALL = out;
 }
 
 /* 订阅时龄(小时);time 格式 YYYY-MM-DD HH:mm */
@@ -2890,40 +3595,218 @@ function subAgeH(t) {
   if (p.length < 5 || p.some(isNaN)) return -1;
   return Math.floor((Date.now() - new Date(p[0], p[1] - 1, p[2], p[3], p[4]).getTime()) / 36e5);
 }
+/* 是否有自定义过滤规则(非全默认)——订阅卡「⚙已过滤」徽章显示条件(v2.7.0) */
+function subFilterCustom(f) {
+  const n = normSubFilter(f);
+  return !n.autoInfo || !n.autoTransit || n.kws.length > 0 || Object.keys(n.regions).some(k => n.regions[k] === false);
+}
 function paneSub() {
-  let h = '<div class="hs-hint" style="margin-bottom:6px">同一时间仅一个订阅生效;添加后自动下载并生成配置</div>';
-  h += '<div class="hs-pghead">'
-  + '<button class="btn hs-sm hs-pri" id="hs_sub_addnode">➕ 添加节点</button>'
-  + '<button class="btn hs-sm" id="hs_sub_manual">✏️ 手动节点(' + HS_MANUAL.length + ')</button>'
-  + '</div>';
-if (!C.subs.length) h += '<div class="hs-hint">暂无订阅,可从下方添加;</div>';
+  /* v2.7.17 布局定稿: pghead 置首(拆出滚动区——卡片多时可滚) + 融合开关上移顶部;
+     融合开时语义切换: 全部订阅生效,激活卡=「⭐规则基准」(提供分流规则),不再是「唯一使用中」 */
+  const fuseOn = C.subFusion && C.policySrc === 'merge';
+  let h = '<div class="hs-pghead">'
+  + '<button class="btn hs-sm hs-pri" id="hs_sub_newbtn">＋ 添加订阅</button>'
+  + '<button class="btn hs-sm" id="hs_sub_manual" title="自己填的服务器节点(区别于订阅拉取),支持链接粘贴与YAML片段">🔧 自建节点(' + HS_MANUAL.length + ')</button>'
+  + '<span style="flex:1"></span>'
+  + '<span style="display:inline-flex;align-items:center;gap:6px;font-size:.72rem;color:' + (fuseOn ? '#8fe39a' : '#b3bdcb') + '" title="开启后(合并模式)全部订阅节点合并进池,加[订阅名]前缀;分流规则跟基准订阅走">🔀 融合'
+  + '<label class="hs-sw"><input type="checkbox" id="hs_sub_fusion" ' + (C.subFusion ? 'checked' : '') + (C.policySrc !== 'merge' ? ' disabled' : '') + '><span></span></label></span>'
+  + '</div>'
+  + '<div class="hs-hint" style="margin:0 0 8px;font-size:.66rem">' + (fuseOn
+    ? '✅ 融合中——全部订阅节点已合并生效;⭐基准订阅提供分流规则(点卡片「设为规则基准」可切换)'
+    : (C.policySrc !== 'merge' ? '融合仅「合并」策略可用(当前:' + ({ self: '自建', merge: '合并', direct: '直通' })[C.policySrc] + ');同一时间仅一个订阅生效' : '同一时间仅一个订阅生效;开启🔀融合后全部订阅节点合并')) + '</div>';
+if (!C.subs.length && !HS_SUB_NEW) h += '<div class="hs-hint" style="margin-bottom:8px">暂无订阅,点下方「＋ 添加订阅」创建</div>';
+  /* v2.7.8 新建卡: 在列表顶部插入(替代底部常驻表单,用户定调) */
+  if (HS_SUB_NEW) h += subEditCardHtml(-1, null);
   C.subs.forEach((sb, i) => {
+    if (i === HS_SUB_EDIT) { h += subEditCardHtml(i, sb); return } /* v2.7.8 就地编辑: 卡片直接变编辑态(不再跳到底部表单) */
     const age = subAgeH(sb.time);
     const stale = age > 24;
-    let badges = '';
-    if (i === C.activeSub && HS_SUBINFO) {
-      if (HS_SUBINFO.left) badges += ' <span class="hs-badge" style="color:#66bb6a">⧇ ' + esc(HS_SUBINFO.left) + '</span>';
-      if (HS_SUBINFO.expire) badges += ' <span class="hs-badge" style="color:#7fc9f2">⏳ ' + esc(HS_SUBINFO.expire) + '</span>';
+    /* v2.7.4 元信息双源合成: subscription-userinfo 头(精确字节/时间戳,Verge 同源)优先,
+       订阅 info 节点文本(HS_SUBINFO_ALL)兑底;统一换算成卡片渲染字段 left/total/used GB+days+forever */
+    const ui = sb.ui && (sb.ui.total > 0 || sb.ui.expire || sb.ui.forever) ? sb.ui : null; /* v2.7.15: 流量或到期任一有值即用 ui(头+文本补抓双源) */
+    const fi = HS_SUBINFO_ALL && HS_SUBINFO_ALL[i] ? HS_SUBINFO_ALL[i] : null;
+    const info = ui
+      ? { leftGB: Math.max(0, (ui.total - ui.up - ui.dl)) / 1073741824, totalGB: ui.total / 1073741824, usedGB: (ui.up + ui.dl) / 1073741824, left: '', expire: ui.expire ? new Date(ui.expire * 1000).toISOString().slice(0, 10) : '', days: ui.expire ? Math.ceil((ui.expire * 1000 - Date.now()) / 86400000) : null, forever: !!ui.forever, nodes: sb.nodes || (fi ? fi.nodes : null), viaHdr: true }
+      : fi;
+    /* 流量条数据: 已用/总量优先;只有剩余时用 总量-剩余 估算已用(仅剩余+无总量不画条) */
+    let fillPct = 0, flowTxt = '';
+    if (info && info.totalGB > 0) {
+      const usedGB = info.usedGB > 0 ? info.usedGB : (info.leftGB > 0 ? Math.max(0, info.totalGB - info.leftGB) : 0);
+      fillPct = Math.min(100, Math.round(usedGB / info.totalGB * 100));
+      /* v2.7.16 定稿: 进度条下一行三数并排(已用/剩余/总量),剩余不再单独占位 */
+      flowTxt = '已用 ' + humanGB(usedGB) + ' · 剩余 ' + humanGB(Math.max(0, info.totalGB - usedGB)) + ' · 总量 ' + humanGB(info.totalGB);
+    } else if (info && info.left) {
+      flowTxt = '⧇ 剩余 ' + esc(info.left);
     }
-    if (stale) badges += ' <span class="hs-badge" style="color:' + (age > 72 ? '#e57373' : '#ffb74d') + '">🕐 ' + (age >= 48 ? Math.floor(age / 24) + '天' : age + 'h') + '未更新</span>';
-    h += '<div class="hs-devrow"><div style="flex:1;min-width:0">'
-    + '<div style="font-size:.82rem;font-weight:600">' + esc(sb.name) + (i === C.activeSub ? ' <span style="color:#7fc9f2;font-size:.64rem;border:1px solid #7fc9f2;border-radius:5px;padding:0 5px">使用中</span>' : '') + badges + '</div>'
-    + '<div style="font-size:.68rem;color:#9aa3b2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(sb.url.replace(/^(https?:\/\/[^\/]+).*$/, '$1/***')) + ' · ' + esc(sb.time || '') + (stale ? ' · 建议更新' : '') + '</div>'
+    const hot = fillPct >= 90;
+    /* 到期展示: 还剩N天(大字)+日期(小字);≤7天红 ≤30天蓝;长期绿徽章;无则不显示 */
+    /* 到期展示(v2.7.5 用户定稿): 右上角——长期有效绿徽章/日期+剩余天数;≤7天红 */
+    let expireHtml = '';
+    if (info && info.forever && !info.expire) expireHtml = '<span style="flex:none;font-size:.68rem;color:#8fe39a;border:1px solid rgba(102,187,106,.45);border-radius:6px;padding:2px 9px">♾ 长期有效</span>';
+    else if (info && info.expire) {
+      const d = info.days;
+      const col = d == null ? '#b3bdcb' : d <= 7 ? '#e57373' : d <= 30 ? '#7fc9f2' : '#b3bdcb';
+      const dTxt = d == null ? esc(info.expire) : d <= 0 ? '已到期' : esc(info.expire) + ' · 还剩' + (d >= 30 ? Math.round(d / 7) + '周' : d + '天');
+      expireHtml = '<span style="flex:none;font-size:.68rem;color:' + col + ';border:1px solid ' + (d != null && d <= 7 ? 'rgba(229,115,115,.5)' : 'rgba(255,255,255,.18)') + ';border-radius:6px;padding:2px 9px">⏳ ' + dTxt + '</span>';
+    }
+    /* v2.7.0 卡片化(原型评审定稿): 左色条激活态/流量条/到期徽章/操作行 */
+    /* v2.7.3 PC 宽视图重排(用户二轮 UI 反馈): 名称不截断(PC 宽度足够)、字号整体放大、
+       已过滤降级到 meta 行小字(不再抢头部)、按钮全带文字、间距舒适化 */
+    h += '<div class="hs-subcard ' + (i === C.activeSub ? 'active' : 'standby') + '"' + (i === C.activeSub ? ' style="background:rgba(127,201,242,.04)"' : '') + '>'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + '<span class="hs-dot ' + (i === C.activeSub ? 'g' : 'o') + '" style="flex:none;width:10px;height:10px"></span>'
+    + '<span style="font-size:1rem;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(sb.name) + '</span>'
+    + (i === C.activeSub ? '<span style="flex:none;font-size:.68rem;color:' + (fuseOn ? '#ffb74d' : '#7fc9f2') + ';border:1px solid ' + (fuseOn ? 'rgba(255,183,77,.5)' : 'rgba(127,201,242,.5)') + ';border-radius:6px;padding:2px 9px">' + (fuseOn ? '⭐ 规则基准' : '✓ 使用中') + '</span>' : '')
+    + (fuseOn ? '<span style="flex:none;font-size:.68rem;color:#8fe39a;border:1px solid rgba(102,187,106,.45);border-radius:6px;padding:2px 9px">✓ 融合中</span>' : '')
+    + expireHtml
+    + (hot ? '<span style="flex:none;font-size:.68rem;color:#ffb74d;border:1px solid rgba(255,183,77,.45);border-radius:6px;padding:2px 9px">⚠ 流量将尽</span>' : '')
     + '</div>'
-    + (i === C.activeSub ? '' : '<button class="btn hs-sm hs-pri" data-subuse="' + i + '">启用</button>')
-    + '<button class="btn hs-sm" data-subupd="' + i + '">' + (i === C.activeSub ? '更新' : '更新') + '</button>'
-    + '<button class="btn hs-sm" data-subedit="' + i + '">编辑</button>'
-    + '<button class="btn hs-sm hs-dgr" data-subdel="' + i + '">删除</button></div>';
+    + '<div class="hs-hint" style="font-size:.7rem;margin:5px 0 3px">' + esc(sb.url.replace(/^(https?:\/\/[^\/]+).*$/, '$1/***')) + '</div>'
+    + (fillPct > 0 || flowTxt
+      ? '<div class="hs-scbar">' + (fillPct > 0 ? '<div class="hs-scfill' + (hot ? ' hot' : '') + '" style="width:' + fillPct + '%"></div>' : '') + '</div>'
+        + '<div style="font-size:.72rem;color:' + (hot ? '#ffb74d' : '#b3bdcb') + ';margin-top:3px">' + flowTxt + '</div>'
+      : '')
+    + '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;font-size:.74rem;color:#b3bdcb;margin-top:8px">'
+    + '<span>📄 ' + (sb.nodes || (info && info.nodes != null && info.nodes > 0 ? info.nodes : 0) || '…') + ' 节点</span>'
+    + (subFilterCustom(sb.filter) ? '<span style="opacity:.75">⚙ 已过滤</span>' : '')
+    + '<span>🕐 ' + esc(sb.time || '') + (stale ? ' <span style="color:' + (age > 72 ? '#e57373' : '#ffb74d') + '">' + (age >= 48 ? Math.floor(age / 24) + '天' : age + 'h') + '未更新</span>' : '') + '</span>'
+    + (info && (info.left || info.expire) ? '<span style="opacity:.6;font-size:.64rem">流量/到期为上次更新快照</span>' : '')
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">'
+    + (i === C.activeSub ? '' : '<button class="btn hs-sm ' + (fuseOn ? '' : 'hs-pri') + '" data-subuse="' + i + '" title="' + (fuseOn ? '切换分流规则来源(策略组/分类规则跟它走,节点池不变)' : '切换当前生效订阅') + '">' + (fuseOn ? '⭐ 设为基准' : '✅ 启用') + '</button>')
+    + '<button class="btn hs-sm" data-subupd="' + i + '">⟳ 更新</button>'
+    + '<button class="btn hs-sm" data-subflt="' + i + '" title="过滤垃圾节点(信息/中转/关键词/地区)">⚙ 过滤</button>'
+    + '<button class="btn hs-sm" data-subedit="' + i + '">✏️ 编辑</button>'
+    + '<button class="btn hs-sm hs-dgr" data-subdel="' + i + '">🗑 删除</button>'
+    + '</div></div>';
   });
-  /* 编辑态表单:预填现值,保存时链接有变化才重新下载(订阅过期换链接无需删除重加) */
-  const ed = HS_SUB_EDIT >= 0 && C.subs[HS_SUB_EDIT] ? C.subs[HS_SUB_EDIT] : null;
-  if (ed) h += '<div class="hs-hint" style="margin-top:10px">正在编辑「' + esc(ed.name) + '」——名称随时可改;链接有变化时保存会重新下载,下载失败则保留原链接</div>';
-  h += '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'
-  + '<input id="hs_sub_name" placeholder="订阅名称" value="' + (ed ? esc(ed.name) : '') + '" style="flex:1;min-width:120px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#e8eaf0;padding:7px 10px;font-size:.76rem">'
-  + '<input id="hs_sub_url" placeholder="订阅链接 https://..." value="' + (ed ? esc(ed.url) : '') + '" style="flex:2;min-width:180px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#e8eaf0;padding:7px 10px;font-size:.76rem">'
-  + '<button class="btn hs-pri" id="hs_sub_add">' + (ed ? '保存修改' : '添加') + '</button>'
-  + (ed ? '<button class="btn" id="hs_sub_cancel">取消</button>' : '') + '</div>'
+  /* v2.7.0 多订阅融合开关: 仅合并模式有效(自建无订阅策略/直通单订阅整体生效);开启后全部订阅
+     订阅节点合并进池,引擎 override.additional-prefix 加[订阅名]前缀防撞名(v1.19.32 真机 -t 实证) */
+  /* v2.7.17: 融合开关已上移 pghead(此底部卡移除);底部仅留概念说明 */
+  /* 编辑态表单(v2.7.8 卡片化): 新建/编辑共用一张卡(名称+链接+保存/取消),替代底部常驻表单 */
+  h += '<div class="hs-hint" style="margin-top:10px;text-align:center">订阅=从链接批量拉取节点;自建节点=自己填服务器(弹窗内粘贴添加/清空)</div>';
   return h;
+}
+/* v2.7.8 订阅编辑卡片(新建 i=-1/编辑 i>=0): 名称+链接内嵌卡片就地编辑 */
+function subEditCardHtml(i, sb) {
+  const isNew = i < 0;
+  return '<div class="hs-subcard active" style="border-color:rgba(127,201,242,.4)">'
+  + '<div style="font-size:.8rem;font-weight:700;color:#7fc9f2;margin-bottom:8px">' + (isNew ? '＋ 新建订阅' : '✏️ 编辑「' + esc(sb.name) + '」') + '</div>'
+  + '<input id="hs_sub_name" placeholder="订阅名称(如:我的机场)" value="' + (sb ? esc(sb.name) : '') + '" style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(127,201,242,.35);border-radius:8px;color:#e8eaf0;padding:8px 10px;font-size:.8rem;margin-bottom:7px">'
+  + '<input id="hs_sub_url" placeholder="订阅链接 https://..." value="' + (sb ? esc(sb.url) : '') + '" style="width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(127,201,242,.35);border-radius:8px;color:#e8eaf0;padding:8px 10px;font-size:.8rem">'
+  + '<div class="hs-hint" style="font-size:.64rem;margin:6px 0 8px">' + (isNew ? '保存后自动下载并生效' : '名称随时可改;链接有变化时保存会重新下载,失败保留原链接') + '</div>'
+  + '<div style="display:flex;gap:8px">'
+  + '<button class="btn hs-pri" id="hs_sub_add" style="flex:1;padding:8px">' + (isNew ? '💾 保存并下载' : '💾 保存修改') + '</button>'
+  + '<button class="btn" id="hs_sub_cancel" style="padding:8px 14px">取消</button>'
+  + '</div></div>';
+}
+/* 订阅节点过滤弹窗(v2.7.0): 规则快照→实时预览→保存热重载;数据源=设备上订阅缓存文件
+   (激活订阅用 HS_SUB_RAW 内存缓存,非激活读 providers/subN.yaml);打开一次加载,之后纯前端重算 */
+async function openSubFilterDlg(i) {
+  const sb = C.subs[i]; if (!sb) return;
+  const f = normSubFilter(sb.filter);
+  let names = [];
+  try {
+    const raw = (i === C.activeSub && HS_SUB_RAW) ? HS_SUB_RAW : await readFile(DIR + '/providers/sub' + i + '.yaml');
+    names = extractNodeNames(raw);
+  } catch (e) { /* 文件读不到→空列表,弹窗提示 */ }
+  /* 首次打开: 把订阅里检测到的地区填入 regions(默认勾选保留;已有值不覆盖) */
+  const rc = {};
+  let otherN = 0;
+  names.forEach(n => { const r = subRegionOf(n); if (r) rc[r] = (rc[r] || 0) + 1; else otherN++ });
+  Object.keys(rc).forEach(r => { if (f.regions[r] === undefined) f.regions[r] = true });
+  if (f.regions['其他'] === undefined) f.regions['其他'] = true; /* v2.7.0: 未识别地区归「其他」,可勾掉排除(用户产品决策) */
+  const renderDlg = () => {
+    /* v2.7.20 滚动位置保持: 点胶囊切去留后整弹窗重建会丢滚动位置(用户失去目标);
+      重建前存两栏 scrollTop,渲染后恢复 */
+    const oldL = document.getElementById('hs_pv_left'); const sl = oldL ? oldL.scrollTop : 0;
+    const oldR = document.getElementById('hs_pv_right'); const sr = oldR ? oldR.scrollTop : 0;
+    let regChips = '';
+    Object.keys(rc).sort((a, b) => rc[b] - rc[a]).forEach(r => {
+      regChips += '<span class="hs-tag' + (f.regions[r] ? ' y' : '') + '" data-sfr="' + esc(r) + '" style="cursor:pointer;margin:2px">' + (f.regions[r] ? '✓' : '✕') + ' ' + esc(r) + '(' + rc[r] + ')</span>';
+    });
+    if (otherN) regChips += '<span class="hs-tag' + (f.regions['其他'] ? ' y' : '') + '" data-sfr="其他" style="cursor:pointer;margin:2px">' + (f.regions['其他'] ? '✓' : '✕') + ' 🌐其他(' + otherN + ')</span>';
+    let kwHtml = f.kws.map((k, j) => '<span class="hs-tag o" style="margin:2px">' + esc(k) + ' <span data-sfk="' + j + '" style="cursor:pointer;color:#ffb3b3">×</span></span>').join('') || '<span class="hs-hint">无关键词</span>';
+    hsOpenSimple('⚙ 节点过滤 · ' + sb.name, ''
+    + '<div class="hs-row"><div class="hs-sl"><div class="hs-st">自动识别信息节点</div><div class="hs-sd">过滤「剩余流量/到期/官网/套餐/重置」类信息节点与 ---/【地区】分隔符</div></div><div class="hs-sc"><label class="hs-sw"><input type="checkbox" id="hs_sf_info" ' + (f.autoInfo ? 'checked' : '') + '><span></span></label></div></div>'
+    + '<div class="hs-row"><div class="hs-sl"><div class="hs-st">过滤国内中转节点</div><div class="hs-sd">过滤名字含「中转/国内」的节点</div></div><div class="hs-sc"><label class="hs-sw"><input type="checkbox" id="hs_sf_transit" ' + (f.autoTransit ? 'checked' : '') + '><span></span></label></div></div>'
+    + '<div class="hs-row" style="align-items:flex-start"><div class="hs-sl"><div class="hs-st">关键词排除</div><div class="hs-sd">节点名包含任一关键词即排除</div><div style="margin-top:6px">' + kwHtml + '</div>'
+    + '<input id="hs_sf_kwin" placeholder="输入关键词回车添加" style="width:100%;margin-top:6px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#e8eaf0;padding:6px 10px;font-size:.72rem"></div></div>'
+    + '<div class="hs-row" style="align-items:flex-start"><div class="hs-sl"><div class="hs-st">地区保留 <span class="hs-hint">(✓=保留 · 点切换;不勾的地区被排除;🌐其他=未识别地区(如广州/自定义命名),勾掉即全部排除)</span></div><div style="margin-top:6px">' + (regChips || '<span class="hs-hint">本订阅未检测到常见地区命名</span>') + '</div></div></div>'
+    + '<div id="hs_sf_pv"></div>'
+    + '<div class="hs-actions"><button class="btn" id="hs_sf_def">恢复默认</button><button class="btn" id="hs_sf_close">取消</button><button class="btn hs-pri" id="hs_sf_save">保存并生效</button></div>'
+    + (names.length ? '' : '<div class="hs-warn" style="margin-top:8px">⚠️ 未读到订阅缓存(节点列表为空)——规则仍可设置,订阅下载后生效</div>'));
+    const pv = previewSubFilter(names, f);
+    const pvEl = $('#hs_sf_pv');
+    /* v2.7.1 预览对齐原型: 统计徽章头 + 左右双栏对比(过滤前|过滤后,各滚动列表,
+       被排除项红色✕在左栏,保留项在右栏)——替换单栏折叠(用户实测吐槽与原型差异巨大) */
+    if (pvEl) {
+      const dropped = pv.total - pv.kept.length;
+      const keptSet = {}; pv.kept.forEach(n => { keptSet[n] = 1 });
+      /* v2.7.7 胶囊可点切换去留: 手动覆盖层 keep/drop——点排除区胶囊=手动保留(移右),
+       * 点保留区胶囊=手动排除(移左),已覆盖态(★)再点=撤销回规则判定;标题重命名「排除/保留」 */
+      const li = (n, ok) => {
+        const ov = pv.over[n];
+        return '<span data-flip="' + esc(n) + '" title="' + (ov ? '★手动指定——点击撤销回规则判定' : ok ? '点击→排除该节点' : '点击→保留该节点') + '" style="display:inline-block;font-size:.72rem;padding:3px 9px;margin:2px;border-radius:12px;cursor:pointer;border:1px solid ' + (ok ? 'rgba(102,187,106,.35)' : 'rgba(229,115,115,.45)') + (ov ? ';box-shadow:0 0 0 1px ' + (ov === '+' ? 'rgba(143,227,154,.5)' : 'rgba(255,179,179,.5)') : '') + ';background:' + (ok ? 'rgba(102,187,106,.07)' : 'rgba(229,115,115,.08)') + ';color:' + (ok ? '#c8d2e0' : '#e57373') + ';max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle">' + (ov ? '<span style="margin-right:3px">★</span>' : (ok ? '<span style="color:#8fe39a;margin-right:3px">✓</span>' : '<span style="margin-right:3px">✕</span>')) + esc(n) + '</span>';
+      };
+      pvEl.innerHTML = ''
+      + '<div style="margin:10px 0 8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+      + '<span style="font-size:.85rem;font-weight:700">实时预览</span>'
+      + '<span class="hs-hint" style="font-size:.64rem">点节点可手动调整去留(★=手动指定,再点撤销)</span>'
+      + '<span class="hs-tag ' + (dropped ? 'o' : 'y') + '" style="font-size:.72rem">' + names.length + ' → ' + pv.kept.length + '</span>'
+      + (pv.info ? '<span class="hs-tag gr" style="font-size:.72rem">信息-' + pv.info + '</span>' : '')
+      + (pv.sep ? '<span class="hs-tag gr" style="font-size:.72rem">分隔符-' + pv.sep + '</span>' : '')
+      + (pv.transit ? '<span class="hs-tag gr" style="font-size:.72rem">中转-' + pv.transit + '</span>' : '')
+      + (pv.kw ? '<span class="hs-tag gr" style="font-size:.72rem">关键词-' + pv.kw + '</span>' : '')
+      + (pv.region ? '<span class="hs-tag gr" style="font-size:.72rem">地区-' + pv.region + '</span>' : '')
+      + (pv.drop ? '<span class="hs-tag o" style="font-size:.72rem">手动排除-' + pv.drop + '</span>' : '')
+      + ((f.keep && f.keep.length) ? '<span class="hs-tag y" style="font-size:.72rem">手动保留-' + f.keep.length + '</span>' : '')
+      + (!dropped ? '<span class="hs-tag y" style="font-size:.72rem">无过滤</span>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:8px">'
+      + '<div style="flex:1;min-width:0;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:8px 10px;background:rgba(0,0,0,.22)">'
+      + '<div style="font-size:.76rem;font-weight:700;color:#e57373;margin-bottom:5px">✕ 排除 <b style="color:#e8eaf0">' + (names.length - pv.kept.length) + '</b> <span class="hs-hint" style="font-size:.66rem">/ 全部 ' + names.length + '</span></div>'
+      + '<div id="hs_pv_left" style="max-height:180px;overflow-y:auto;line-height:1.9">' + names.map(n => li(n, !!keptSet[n])).join('') + '</div></div>'
+      + '<div style="flex:1;min-width:0;border:1px solid rgba(102,187,106,.4);border-radius:10px;padding:8px 10px;background:rgba(102,187,106,.07)">'
+      + '<div style="font-size:.76rem;font-weight:700;color:#8fe39a;margin-bottom:5px">✓ 保留 <b style="color:#e8eaf0">' + pv.kept.length + '</b> <span class="hs-hint" style="font-size:.66rem;font-weight:400">/ 全部 ' + names.length + '</span></div>'
+      + '<div id="hs_pv_right" style="max-height:180px;overflow-y:auto;line-height:1.9">' + pv.kept.map(n => li(n, true)).join('') + '</div></div>'
+      + '</div>';
+    }
+    const infoEl = $('#hs_sf_info'); if (infoEl) infoEl.onchange = function () { f.autoInfo = this.checked; renderDlg() };
+    const pvLEl = document.getElementById('hs_pv_left'); if (pvLEl) pvLEl.scrollTop = sl; /* 恢复滚动位置 */
+    const pvREl = document.getElementById('hs_pv_right'); if (pvREl) pvREl.scrollTop = sr;
+    const trEl = $('#hs_sf_transit'); if (trEl) trEl.onchange = function () { f.autoTransit = this.checked; renderDlg() };
+    document.querySelectorAll('[data-sfk]').forEach(x => x.onclick = () => { f.kws.splice(+x.dataset.sfk, 1); renderDlg() });
+    const kwEl = $('#hs_sf_kwin'); if (kwEl) kwEl.onkeydown = e => { if (e.key === 'Enter' && kwEl.value.trim()) { f.kws.push(kwEl.value.trim().slice(0, 30)); renderDlg() } };
+    document.querySelectorAll('[data-sfr]').forEach(c => c.onclick = () => { f.regions[c.dataset.sfr] = !f.regions[c.dataset.sfr]; renderDlg() });
+    /* v2.7.7 预览胶囊切换: 规则排除→点=手动保留;规则保留→点=手动排除;已覆盖(★)→点=撤销回规则 */
+    document.querySelectorAll('[data-flip]').forEach(el => el.onclick = () => {
+      const n = el.dataset.flip;
+      const ov = pv.over[n];
+      const keepArr = f.keep = Array.isArray(f.keep) ? f.keep : [];
+      const dropArr = f.drop = Array.isArray(f.drop) ? f.drop : [];
+      const isKept = pv.kept.indexOf(n) >= 0; /* 块外不可见 keptSet(if 块内 const),用闭包 pv 判定(v2.7.10 修复 ReferenceError) */
+      if (ov === '+') { const x = keepArr.indexOf(n); if (x >= 0) keepArr.splice(x, 1) }
+      else if (ov === '-') { const x = dropArr.indexOf(n); if (x >= 0) dropArr.splice(x, 1) }
+      else if (isKept) { if (dropArr.indexOf(n) < 0) dropArr.push(n) }
+      else { if (keepArr.indexOf(n) < 0) keepArr.push(n) }
+      renderDlg();
+    });
+    $('#hs_sf_def').onclick = () => { const keep = Object.keys(f.regions); f.autoInfo = true; f.autoTransit = true; f.kws = []; keep.forEach(r => f.regions[r] = true); renderDlg() };
+    $('#hs_sf_close').onclick = () => hsClose('hs_modal_simple');
+    $('#hs_sf_save').onclick = async () => {
+      const chk = previewSubFilter(names, f);
+      if (names.length && chk.kept.length === 0) { toast('⚠️ 全部节点被过滤——至少保留一个节点才能保存', 'red'); return }
+      sb.filter = normSubFilter(f);
+      await saveConf();
+      hsClose('hs_modal_simple');
+      renderPane();
+      if (subEffective(i) && ST.running) { await saveConfReload('✅ 过滤已保存并热重载') }
+      else toast('✅ 过滤已保存' + (subEffective(i) ? '(下次启动生效)' : '(该订阅未激活,启用时生效)'), 'green');
+      await opLog('订阅「' + sb.name + '」过滤规则保存:排除' + (chk.total - chk.kept.length) + '个节点');
+    };
+  };
+  renderDlg();
 }
 /* ---- 分流 ---- */
 function bootDesc(d) {
@@ -2936,17 +3819,271 @@ function bootDesc(d) {
 async function etCheck() {
   const a = await run('[ -x /data/plugins/easytier/easytier-core ] && echo 1', 5000);
   if ((a.content || '').trim() !== '1') return 'noinstall';
-  const b = await run('cat /data/plugins/easytier/state.json 2>/dev/null', 5000);
-  const txt = (b.content || '').trim();
+  /* v2.7.27 修复: cat 直读经面板传输会被截断(用户实锢: state.json 1KB 37网段时
+     JSON.parse 必挂→误报「状态文件异常」),改用 base64 通道+与 readEtState 同款容错 */
+  const b = await run('base64 < /data/plugins/easytier/state.json 2>/dev/null', 5000);
+  const txt = b64d(String(b.content || '').replace(/\s+/g, '')).trim();
   if (!txt) return 'nostate';
   try {
     const j = JSON.parse(txt);
     if (!j || j.version !== 1 || typeof j.active !== 'boolean') return 'badstate';
     if (j.active && !(Array.isArray(j.cidrs) && j.cidrs.length)) return 'badstate';
     return 'ok';
-  } catch (e) { return 'badstate' }
+  } catch (e) {
+    /* 半文件降级(与 readEtState 同源逻辑): active+cidrs 在文件前部,大概率可救 */
+    const mAct = /"active"\s*:\s*(true|false)/.exec(txt);
+    const mCid = /"cidrs"\s*:\s*\[([^\]]*)\]/.exec(txt);
+    if (mAct && mAct[1] === 'true' && mCid && mCid[1].replace(/["\s]/g, '')) return 'ok';
+    return 'badstate';
+  }
 }
 /* 查看订阅全部节点(9090 provider API,含延迟) */
+
+/* ===== v2.9.30 卡内活控件挂载(真机反馈: 详情卡按钮应触发真实交互,弃锚点跳转) ===== */
+async function riverLiveExit() { /* v2.9.43: 兜底出口实测——MATCH 规则经组链解析到当前选中节点+延迟(用户实锢: 只显示"节点选择"不知道流量去哪) */
+  const px = await apiGet('/proxies');
+  if (!px || !px.proxies) return null;
+  const P = px.proxies;
+  const entry = hsMainGroup();
+  const chain = []; let cur = entry, d = 0;
+  while (P[cur] && d < 6) { chain.push(cur); if (!P[cur].now) break; cur = P[cur].now; d++ }
+  const fp = P[cur];
+  const delay = fp && fp.history && fp.history.length ? fp.history[fp.history.length - 1].delay : 0;
+  return { chain: chain.join(' → ') + (delay ? ' (' + delay + 'ms)' : ''), final: cur, alive: !!(fp && fp.alive !== false) };
+}
+riverMountLive._edit = null; riverMountLive._tgt = null; riverMountLive._zone = null; /* v2.9.44: 编辑态/回填目标/输入区开闭记忆 */
+function riverMountLive(kind, el) {
+  const MN = { suffix: '后缀', prefix: '前缀', exact: '精确' };
+  const wrap = (inner) => { el.innerHTML = '<div style="border-top:1px dashed rgba(255,255,255,.08);padding-top:8px;animation:hsRvLiveIn 1s cubic-bezier(.2,.8,.25,1) both">' + inner + '</div>' }; /* v2.9.49: 编辑/回填/增删重渲染渐入(生硬→柔和) */
+  const row = (a, b, c) => '<div class="hs-row" style="min-height:36px;padding:5px 2px"><div class="hs-sl"><div class="hs-st">' + a + '</div>' + (b ? '<div class="hs-sd">' + b + '</div>' : '') + '</div><div class="hs-sc">' + c + '</div></div>';
+  const seg = (id, def) => '<div class="hs-seg" id="' + id + '">' + ['suffix', 'prefix', 'exact'].map(x => '<button data-m="' + x + '" class="' + (x === def ? 'on' : '') + '">' + MN[x] + '</button>').join('') + '</div>';
+  if (kind === 'cn') {
+    wrap(
+      row('启用直通', '中国 IP 在防火墙层直接转发,不进引擎', '<label class="hs-sw"><input type="checkbox" id="hs_rv_chn_sw" ' + (C.cnBypass !== false ? 'checked' : '') + '><span></span></label>')
+      + row('路由表', ST.chn >= 5000 ? '<span style="color:#66bb6a">已就绪</span> · v4 ' + ST.chn + ' 条' + ((ST.chn6 || 0) >= 20 ? ' · v6 ' + ST.chn6 + ' 条' : '') : '未安装', '<button class="btn hs-sm" id="hs_rv_chn_dl">' + (ST.chn >= 5000 ? '更新' : '在线下载') + '</button>')
+      + row('手动上传', '在线下载失败时用', '<button class="btn hs-sm" id="hs_rv_chn_up">上传</button>')
+      + '<div id="hs_rv_chn_prog"></div>');
+    const sw = el.querySelector('#hs_rv_chn_sw');
+    if (sw) sw.onchange = e => { op(null, async () => { C.cnBypass = e.target.checked; await saveConf(); if (ST.running) await reapplyFw() }, '✅ 国内直通已' + (e.target.checked ? '开启' : '关闭'), '应用直通规则中…') };
+    const dl = el.querySelector('#hs_rv_chn_dl'); if (dl) dl.onclick = () => chnInstall(dl);
+    const up = el.querySelector('#hs_rv_chn_up'); if (up) up.onclick = () => chnUpload();
+    return;
+  }
+  if (kind === 'et') {
+    const etf = document.getElementById('hs_et_fold');
+    wrap(row('ET组网 路由表', '查看将被防火墙排除的网段与端口', '<button class="btn hs-sm hs-pri" id="hs_rv_et_open">展开查看</button>'));
+    const b = el.querySelector('#hs_rv_et_open');
+    if (b) b.onclick = () => { if (etf) { etf.open = true; etf.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } };
+    return;
+  }
+  if (kind === 'ex' || kind === 'fc') {
+    /* v2.9.44: 用户定稿设计——浏览态条目正常显示+徽标;编辑态只加 ✎/✕ 小按钮,笔=回填到输入框修改后「更新」;输入框常驻(添加是编辑的一部分) */
+    const D = setDraft(); const arr = kind === 'ex' ? D.exclude : D.force;
+    const pre = kind === 'ex' ? 'ex' : 'fc';
+    const editing = riverMountLive._edit === kind;
+    const tgt = (riverMountLive._tgt === null || riverMountLive._tgt === undefined) ? null : riverMountLive._tgt; /* v2.9.45: 修索引0被 ||null 吞(第一条回填失效) */
+    const items = arr.map((x, i) => '<div class="hs-row" style="min-height:32px;padding:3px 2px"><div class="hs-sl"><div class="hs-st">' + esc(x.v) + ' <span class="hs-sd" style="display:inline;font-size:.68rem;color:#7a8aa5">· ' + (MN[x.m] || (x.m === 'cidr' ? 'IP 网段' : '')) + '</span></div></div><div class="hs-sc" style="gap:4px">' /* v2.9.45: 匹配方式贴域名后纯文本,不再像可点胶囊 */
+      + (editing ? '<button class="btn hs-sm" data-rvl-edit="' + i + '" style="padding:2px 7px" title="回填到输入框修改">✎</button><button class="btn hs-sm" data-rvl-del="' + i + '" style="padding:2px 7px;color:#ff8a80;border-color:rgba(255,120,100,.4)" title="删除">✕</button>' : '')
+      + '</div></div>').join('') || '<div class="hs-sd" style="padding:2px 0">暂无条目</div>';
+    const zoneOpen = editing || (riverMountLive._zone === kind);
+    wrap(
+      (arr.length ? '<div class="hs-hint" style="margin-bottom:2px">' + arr.length + ' 条' + (editing ? ' · 编辑中' : '') + '</div>' : '')
+      + items
+      + '<div class="hs-rv-addzone" id="hs_rv_' + pre + '_zone" style="max-height:' + (zoneOpen ? '200px' : '0') + ';overflow:hidden;transition:max-height 1.1s cubic-bezier(.25,.9,.3,1.1),opacity .8s;opacity:' + (zoneOpen ? '1' : '0') + '">'
+      + '<div class="hs-row" style="min-height:36px;padding:6px 2px 2px"><div class="hs-sl"><input id="hs_rv_' + pre + '_in" value="' + (tgt !== null && arr[tgt] ? esc(arr[tgt].v) : '') + '" placeholder="' + (kind === 'ex' ? '域名或 IP/网段,如 corp.cn' : '域名或 IP,如 openai.com') + '" style="background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#e8eaf0;padding:5px 8px;font-size:.76rem;width:100%"></div></div>'
+      + '<div style="display:flex;gap:6px;align-items:center;padding:4px 2px">' + seg('hs_rv_' + pre + '_mode', tgt !== null && arr[tgt] ? arr[tgt].m : 'suffix') + '<button class="btn hs-sm hs-pri" id="hs_rv_' + pre + '_ok">' + (tgt !== null ? '更新' : '加入') + '</button></div></div>'
+      + '<div style="display:flex;gap:6px;margin-top:8px;align-items:center">' + (editing ? '' : '<button class="btn hs-sm" id="hs_rv_' + pre + '_addbtn" style="border-style:dashed">＋ 添加</button>') /* v2.9.48: 编辑态输入框已常驻展示,添加按钮隐藏防误触收起(真机反馈会连带折叠编辑按钮) */ + (arr.length ? '<button class="btn hs-sm ' + (editing ? 'hs-pri' : '') + '" id="hs_rv_' + pre + '_editbtn" style="' + (editing ? 'width:100%' : 'margin-left:auto') + '">' + (editing ? '✓ 完成' : '✎ 编辑') + '</button>' : '') + '</div>');
+    const zone = el.querySelector('#hs_rv_' + pre + '_zone');
+    const panel = el.closest && el.closest('.vpanel');
+    const addBtn = el.querySelector('#hs_rv_' + pre + '_addbtn');
+    /* v2.9.50: 遮挡复发根因——双 rAF 采到的是 1.1s 过渡的中间值。改确定性计算: 面板高=当前内容高+开着的输入区内容高+余量,与过渡时刻无关 */
+    const repanel = () => {
+      if (!panel) return;
+      const zoneOpen2 = zone.style.opacity === '1';
+      const zh2 = zoneOpen2 ? zone.scrollHeight + 12 : 0;
+      panel.style.maxHeight = (panel.scrollHeight + zh2 + 44) + 'px';
+    };
+    const openZone = (open) => {
+      zone.style.maxHeight = open ? Math.max(120, zone.scrollHeight + 8) + 'px' : '0';
+      zone.style.opacity = open ? '1' : '0';
+      addBtn.textContent = open ? '✕ 收起' : '＋ 添加';
+      riverMountLive._zone = open ? kind : null;
+      repanel();
+      if (open) { const ip = el.querySelector('#hs_rv_' + pre + '_in'); if (ip) ip.focus() }
+    };
+    if (addBtn) addBtn.onclick = () => { if (riverMountLive._tgt !== null) { riverMountLive._tgt = null; riverMountLive(kind, el); openZone(true) } else openZone(zone.style.opacity !== '1') }; /* 编辑态按钮已隐藏,此路径仅浏览态 */
+    const eb = el.querySelector('#hs_rv_' + pre + '_editbtn');
+    if (eb) eb.onclick = () => { riverMountLive._edit = editing ? null : kind; riverMountLive._tgt = null; riverMountLive._zone = riverMountLive._edit ? kind : null; riverMountLive(kind, el); riverSyncDirty(); repanel() };
+    const segEl = el.querySelector('#hs_rv_' + pre + '_mode');
+    if (segEl) segEl.querySelectorAll('button').forEach(mb => mb.onclick = () => { segEl.querySelectorAll('button').forEach(x => x.classList.remove('on')); mb.classList.add('on') });
+    const ok = el.querySelector('#hs_rv_' + pre + '_ok');
+    if (ok) ok.onclick = () => {
+      const inp = el.querySelector('#hs_rv_' + pre + '_in'); const v = inp.value.trim();
+      if (!v) { toast('请输入内容', 'red'); return }
+      const on = segEl.querySelector('.on'); let mm = on ? on.dataset.m : 'suffix';
+      if (/^\d+\.\d+\.\d+\.\d+(\/\d+)?$/.test(v)) mm = 'cidr';
+      if (riverMountLive._tgt !== null) {
+        const o0 = arr[riverMountLive._tgt] || {};
+        if (o0.v === v && o0.m === mm) { toast('内容没变,未做修改', 'pink'); return } /* v2.9.47: 无变更守卫(真机反馈: 回填后直接点更新也报已更新) */
+        arr[riverMountLive._tgt] = { v: v, m: mm }; toast('已更新(顶部「保存」后生效)', 'green'); riverMountLive._tgt = null
+      }
+      else { arr.push({ v: v, m: mm }); toast('已加入草稿,顶部「保存」后生效', 'green') }
+      riverMountLive(kind, el); renderRiverInPane(); riverSyncDirty(); repanel();
+    };
+    const inp2 = el.querySelector('#hs_rv_' + pre + '_in');
+    if (inp2) inp2.onkeydown = e => { if (e.key === 'Enter') ok.click() };
+    el.querySelectorAll('[data-rvl-edit]').forEach(b3 => b3.onclick = () => { riverMountLive._tgt = +b3.dataset.rvlEdit; riverMountLive._zone = kind; riverMountLive(kind, el); repanel(); const ip2 = el.querySelector('#hs_rv_' + pre + '_in'); if (ip2) ip2.focus() });
+    el.querySelectorAll('[data-rvl-del]').forEach(b2 => b2.onclick = () => { arr.splice(+b2.dataset.rvlDel, 1); if (riverMountLive._tgt === +b2.dataset.rvlDel) riverMountLive._tgt = null; else if (riverMountLive._tgt !== null && riverMountLive._tgt > +b2.dataset.rvlDel) riverMountLive._tgt--; riverMountLive(kind, el); renderRiverInPane(); riverSyncDirty(); repanel() });
+    return;
+  }
+}
+function riverSyncDirty() { /* v2.9.41: 卡内增删后刷新顶部脏标与保存/放弃启停(与 syncBar 同口径) */
+  const dh = document.getElementById('hs_sp_dirty');
+  const sv = document.getElementById('hs_sp_save'); const dc = document.getElementById('hs_sp_discard');
+  const n2 = setDiff().n;
+  if (dh) dh.textContent = n2 === 0 ? '' : ('● ' + n2 + ' 处修改未保存(保存只检查修改项)');
+  if (sv) sv.disabled = n2 === 0; if (dc) dc.disabled = n2 === 0;
+}
+function renderRiverInPane() { /* v2.9.30: 草稿变动后局部重绘河流(不整页 renderPane,保住打开的卡片) */
+  if (hsTab !== 'split') return;
+  riverLiveExit().then(function (ex2) { riverRender({ C: C, ST: ST, ET: ET_CACHE, EX: (SET_DRAFT && SET_DRAFT.exclude) || C.exclude || [], FC: (SET_DRAFT && SET_DRAFT.force) || C.force || [], game: HS_GAME_DOMAINS, esc: esc, toast: toast, run: run, apiGet: apiGet, act: riverAct, restStats: riverRestStats, deepRest: riverDeepRest, mountLive: riverMountLive, exitLive: ex2 }); }).catch(function () { });
+}
+/* ===== v2.9.29 第⑤层深判:IP查china_ip精确判定/域名演算显式规则+兜底链(真机反馈: 落到其余流量后不知直连还是代理) ===== */
+function riverV6InBig(ip, cidr) {
+  const parts = String(cidr).split('/'); const net = parts[0]; const pl = +parts[1] || 128;
+  const toBig = (s) => { const seg = s.split('::'); const h0 = seg[0] ? seg[0].split(':') : []; const t0 = seg.length > 1 && seg[1] ? seg[1].split(':') : [];
+    const g = h0.concat(Array(Math.max(8 - h0.length - t0.length, 0)).fill('0')).concat(t0);
+    if (g.length !== 8) return null; let v = 0n;
+    for (const x of g) { if (!/^[0-9a-f]{1,4}$/.test(x)) return null; v = (v << 16n) + BigInt(parseInt(x, 16)) } return v };
+  const a = toBig(ip), b = toBig(net); if (a === null || b === null) return false;
+  if (pl <= 0) return true; return (a >> BigInt(128 - pl)) === (b >> BigInt(128 - pl));
+}
+async function riverDeepRest(q, isIp) {
+  if (!ST.running) return { verdict: 'direct', why: '引擎未运行/未接管——当前流量不经小海关,全部直连' }; /* v2.9.37: 接管态守卫(关态下一切直连,防假"走代理") */
+  const px = await apiGet('/proxies'); const rs = await apiGet('/rules');
+  if (!px || !px.proxies) return null;
+  const P = px.proxies;
+  const resolve = (nm) => { let c = nm, d = 0; while (P[c] && P[c].now && d < 6) { c = P[c].now; d++ } return c };
+  const chainOf = (nm) => { const a = []; let c = nm, d = 0; while (P[c] && d < 6) { a.push(c); if (!P[c].now) break; c = P[c].now; d++ }
+    const fp = P[c]; const dl = fp && fp.history && fp.history.length ? fp.history[fp.history.length - 1].delay : 0;
+    return { fin: c, chain: a.join(' → ') + (dl ? ' (' + dl + 'ms)' : '') } };
+  const label = (f) => f === 'DIRECT' ? '直连' : (f === 'REJECT' ? '拦截' : '走代理');
+  if (isIp) {
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(q)) {
+      const r = await run('ipset test hs_cn ' + q + ' >/dev/null 2>&1; echo RC=$?', 4000); /* v2.9.31: ipset test 结果走 stderr,以退出码判定(真机实锢 2>/dev/null 吞输出) */
+      if (r && /RC=0/.test(r.content || '')) return { verdict: 'direct', node: 'cn', why: '国内 IP 命中 china_ip 段(防火墙直接放行,不进小海关) → 直连' };
+    } else {
+      const gs = q.split(':').filter(Boolean); const pats = [];
+      for (let k = Math.min(4, gs.length); k >= 1; k--) pats.push(gs.slice(0, k).join(':'));
+      const r = await run("grep -m8 -E \"" + pats.join('|') + "\" " + DIR + "/rules/china_ip.txt 2>/dev/null", 5000);
+      const lines = ((r && r.content) || '').split('\n').map(s => s.trim()).filter(Boolean);
+      for (const L of lines) { const seg2 = L.split('/'); const pl = seg2[1] || '128'; if (riverV6InBig(q, seg2[0] + '/' + pl)) return { verdict: 'direct', node: 'cn', why: '国内 IPv6 命中 china_ip 段 ' + L + '(防火墙直接放行,不进小海关) → 直连' } }
+    }
+    const m = rs && rs.rules ? rs.rules.find(x => x.type === 'Match') : null;
+    if (m) { const c = chainOf(m.proxy || ''); return { verdict: c.fin === 'DIRECT' ? 'direct' : 'proxy', why: '未命中任何国内段 → MATCH 兜底 ' + c.chain + ' → ' + label(c.fin) } }
+    return null;
+  }
+  let exotic = false; /* v2.9.37: 订阅高级规则(正则/逻辑/子规则)本地无法演算——遇之不再冒充确定答案 */
+  if (rs && rs.rules) {
+    for (const r of rs.rules) {
+      if (r.type === 'GeoSite' || r.type === 'GeoIP' || r.type === 'Match') break;
+      if (['DomainRegex', 'SubRules', 'AND', 'OR', 'NOT'].indexOf(r.type) >= 0) { exotic = true; break }
+      const pl = (r.payload || '').toLowerCase(); if (!pl || !r.proxy) continue;
+      let hit = false;
+      if (r.type === 'Domain' && pl === q) hit = true;
+      else if (r.type === 'DomainSuffix' && (q === pl || q.endsWith('.' + pl))) hit = true;
+      else if (r.type === 'DomainKeyword' && q.indexOf(pl) >= 0) hit = true;
+      if (hit) { const c = chainOf(r.proxy); return { verdict: c.fin === 'DIRECT' ? 'direct' : (c.fin === 'REJECT' ? 'reject' : 'proxy'), why: '命中订阅规则 ' + r.type + ',' + pl + ' → ' + c.chain + ' → ' + label(c.fin) } }
+    }
+  }
+  if (exotic) { const mEx = rs.rules.find(x => x.type === 'Match'); const cEx = mEx ? chainOf(mEx.proxy || '') : null; return { verdict: 'dual', why: '订阅含高级规则(正则/逻辑),本地无法完全演算——简单规则未命中,后续由引擎判定(未命中直连规则则兜底' + (cEx ? ' ' + cEx.chain : '') + ')' } }
+  /* v2.9.31 fake-ip oracle(真机验证: baidu→真实国内IP, google→198.18.x): 引擎 fake-ip-filter 与 geosite:cn 同源——
+     nslookup 引擎 DNS 返回真实 IP=命中国内域名通道(直连);返回 198.18/198.19 fake IP=未命中任何直连规则(→MATCH 兜底代理) */
+  if (ST.running && C.ports && C.ports.dns) {
+    try {
+      const nr = await run('nslookup ' + shq(q) + ' 127.0.0.1:' + C.ports.dns + ' 2>&1 | grep -i address | grep -v 127.0.0.1', 6000);
+      /* v2.9.33: 双栈解析——收集全部 A/AAAA 地址,按 C.v6Dns 决定判据族(v6 开=流量优先走 v6,判 v6;关=判 v4),单 v4 判定在 v6 开启时会误判 */
+      const txtO = (nr && nr.content) || '';
+      const allAddrs = [];
+      const reA = /((?:\d{1,3}\.){3}\d{1,3})/g; let mm;
+      while ((mm = reA.exec(txtO)) !== null) if (!/^198\.1[89]\./.test(mm[1])) allAddrs.push({ f: 'v4', a: mm[1] });
+      const re6 = /([0-9a-f]{1,4}(?::[0-9a-f]{0,4}){2,7})/gi;
+      while ((mm = re6.exec(txtO)) !== null) { const a6 = mm[1].toLowerCase(); if (a6 !== '::1' && !a6.startsWith('fc') && !a6.startsWith('fd')) { if (!allAddrs.some(x => x.a === a6)) allAddrs.push({ f: 'v6', a: a6 }) } }
+      const fakes = [];
+      if (/198\.1[89]\.[\d.]+/.test(txtO)) fakes.push('v4');
+      if (/(?:^|\s)(fc|fd)[0-9a-f]{0,3}:/i.test(txtO)) fakes.push('v6');
+      const m2b = rs && rs.rules ? rs.rules.find(x => x.type === 'Match') : null;
+      const cb = m2b ? chainOf(m2b.proxy || '') : null;
+      const prefF = C.v6Dns ? 'v6' : 'v4';
+      /* v2.9.35: 判据族跟随开关显式过滤——v6 关时即使引擎吐出 AAAA 也不采信(防异常误判);v6 开优先 v6,域名无 AAAA 回落 v4(流量实际也走 v4) */
+      const usable = C.v6Dns ? allAddrs : allAddrs.filter(x => x.f === 'v4');
+      const pref = usable.find(x => x.f === prefF) || usable[0];
+      /* 判定: 偏好族拿到 fake(198.18/19 或 fc/fd) → 未命中直连通道 → 兜底代理;偏好族真实地址 → 命中国内域名通道 → 直连(v4 再 china_ip 双确认,v6 查 china_ip v6 段) */
+      const fakeOfPref = fakes.includes(prefF) || (pref && ((pref.f === 'v4' && false) || false));
+      const resolvedFake = (() => {
+        if (fakes.length >= 2) return true; /* 双栈都 fake 或解析被 fake 池接管 */
+        if (!pref) return fakes.length > 0; /* 没有真实地址,只有 fake */
+        return false;
+      })();
+      if (resolvedFake) return { verdict: 'proxy', why: 'DNS 引擎判定: 未命中国内域名库(fake-ip' + (C.v6Dns ? ',v6 优先' : '') + ') → MATCH 兜底' + (cb ? ' ' + cb.chain : '') + ' → 走代理' };
+      if (pref) {
+        const ip = pref.a;
+        if (pref.f === 'v4') {
+          const t = await run('ipset test hs_cn ' + ip + ' >/dev/null 2>&1; echo RC=$?', 4000);
+          const cn = t && /RC=0/.test(t.content || '');
+          if (cn) return { verdict: 'direct', node: 'cn', why: '国内域名命中 geosite:cn · 解析国内 IP ' + ip + '(china_ip 双确认) → 直连' };
+          if (/^(time\.|ntp\.|\d+\.)|[\.-]stun[\.-]|\.(lan|local)$/i.test(q)) return { verdict: 'dual', why: '该域名命中 fake-ip 通用模式(时间/STUN/内网)返回真实 IP,不属国内域名库——由引擎规则决定(通常走兜底)' };
+          return { verdict: 'direct', node: 'cn', why: '国内域名命中 geosite:cn(小海关内直接放行) · 解析 ' + ip + ' → 直连' };
+        }
+        const gs = ip.split(':').filter(Boolean).slice(0, 4); const pats = []; for (let k = gs.length; k >= 1; k--) pats.push(gs.slice(0, k).join(':'));
+        const g = await run('grep -m8 -E "' + pats.join('|') + '" ' + DIR + '/rules/china_ip.txt 2>/dev/null', 5000);
+        const v6cn = ((g && g.content) || '').split('\n').map(s => s.trim()).filter(Boolean).some(L => riverV6InBig(ip, (L.split('/')[0]) + '/' + (L.split('/')[1] || '128')));
+        if (v6cn) return { verdict: 'direct', node: 'cn', why: '国内域名命中 geosite:cn · 解析国内 IPv6 ' + ip + '(china_ip v6 段确认) → 直连(v6 优先栈)' };
+        if (/^(time\.|ntp\.|\d+\.)|[\.-]stun[\.-]|\.(lan|local)$/i.test(q)) return { verdict: 'dual', why: '该域名命中 fake-ip 通用模式(时间/STUN/内网),不属国内域名库——由引擎规则决定' };
+        return { verdict: 'direct', node: 'cn', why: '国内域名命中 geosite:cn(小海关内直接放行) · 解析 IPv6 ' + ip + ' → 直连(v6 优先栈)' };
+      }
+    } catch (e) { }
+  }
+  const m2 = rs && rs.rules ? rs.rules.find(x => x.type === 'Match') : null;
+  const geo = rs && rs.rules ? rs.rules.find(x => x.type === 'GeoSite') : null;
+  const geoDir = geo && resolve(geo.proxy || '') === 'DIRECT';
+  const c2 = m2 ? chainOf(m2.proxy || '') : null;
+  return { verdict: 'dual', why: '引擎未运行无法实测:' + (geoDir ? '国内域名(geosite:cn)→直连; 海外域名' : '该域名') + '→MATCH 兜底' + (c2 ? ' ' + c2.chain + ' → ' + label(c2.fin) : '') };
+}
+/* ===== v2.9.28 其余流量节点:订阅规则判向实测(引擎 /rules+/proxies,事件驱动) ===== */
+async function riverRestStats() {
+  const rs = await apiGet('/rules'); const px = await apiGet('/proxies');
+  if (!rs || !rs.rules || !px || !px.proxies) return null;
+  const P = px.proxies;
+  const resolve = (name) => { let cur = name, d = 0; while (P[cur] && P[cur].now && d < 6) { cur = P[cur].now; d++ } return cur };
+  let direct = 0, proxy = 0, reject = 0, matchChain = '';
+  for (const r of rs.rules) {
+    const tgt = r.proxy || '';
+    if (r.type === 'Match') {
+      const chain = []; let cur = tgt, d = 0;
+      while (P[cur] && d < 6) { chain.push(cur); if (!P[cur].now) break; cur = P[cur].now; d++ }
+      const fp = P[cur];
+      const delay = fp && fp.history && fp.history.length ? fp.history[fp.history.length - 1].delay : 0;
+      matchChain = chain.join(' → ') + (delay ? ' (' + delay + 'ms)' : '');
+      continue;
+    }
+    const fin = resolve(tgt);
+    if (fin === 'DIRECT') direct++;
+    else if (fin === 'REJECT' || fin === 'REJECT-DROP' || fin === 'PASS') reject++;
+    else proxy++;
+  }
+  return { total: rs.rules.length, direct: direct, proxy: proxy, reject: reject, matchChain: matchChain };
+}
+/* ===== v2.9.23 河流分岔(泳道定稿)整体迁入 src/分流河流.js;此处仅留详情动作适配 ===== */
+function riverAct(a) {
+  riverClose();
+  if (a === 'rv-upd-ip') { openMgr('set'); toast('到 设置→分流 更新路由表', 'green') }
+  else if (a === 'rv-et-fold') { const f = document.getElementById('hs_et_fold'); if (f) { f.open = true; f.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) } else openMgr('split') }
+  else if (a === 'rv-fc-add' || a === 'rv-fc-edit') { const inp = document.getElementById('hs_fc_in'); if (inp) { inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); inp.focus() } else openMgr('split') }
+  else if (a === 'rv-ex-add' || a === 'rv-ex-edit') { const inp = document.getElementById('hs_ex_in'); if (inp) { inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); inp.focus() } else openMgr('split') }
+  else if (a === 'rv-policy') { openMgr('set'); toast('到 设置→策略来源 查看', 'green') }
+  else if (a === 'rv-node') { openMgr('node'); toast('在节点页选择出口', 'green') } /* v2.9.30 */
+}
 function paneSplit() {
   const D = SET_DRAFT;
   const EX = D ? D.exclude : C.exclude, FC = D ? D.force : C.force;
@@ -2957,12 +4094,8 @@ function paneSplit() {
   FC.forEach((x, i) => { fcRows += R(esc(x.v), (MN[x.m] || '') + ' · 强制走代理', '<button class="btn hs-sm" data-rmfc="' + i + '">删除</button>') });
   const MODESEG = (id) => '<div class="hs-seg" id="' + id + '"><button data-m="suffix" class="on">后缀</button><button data-m="prefix">前缀</button><button data-m="exact">精确</button></div>';
   const ADD = (inp, mode, btn, ph) => '<div class="hs-row"><div class="hs-sl"><input id="' + inp + '" placeholder="' + ph + '" style="background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.16);border-radius:8px;color:#e8eaf0;padding:5px 8px;font-size:.76rem;width:100%"></div><div class="hs-sc">' + MODESEG(mode) + '<button class="btn hs-sm" id="' + btn + '">添加</button></div></div>';
-  const CQ = ['①', '②', '③', '④', '⑤']; let pi = 0, pv = '';
-  if (C.cnBypass !== false && ST.chn >= 5000) { pi++; pv += '<div class="hs-li">🌎 ' + CQ[pi - 1] + ' 国内直通:' + ST.chn + ' 条中国 IP 段内核态放行,不进代理</div>' }
-  if (C.coexistAuto) { pi++; pv += '<div class="hs-li">🛡 ' + CQ[pi - 1] + ' 自动兼容排除:EasyTier 网段+打洞端口(state.json)—— 防火墙层,不进代理</div>' }
-  if (FC.length) { pi++; pv += '<div class="hs-li">⬆ ' + CQ[pi - 1] + ' 强制代理(置顶):' + FC.map(x => esc(x.v) + '(' + MN[x.m] + ')').join(' · ') + '</div>' }
-  if (EX.length) { pi++; pv += '<div class="hs-li">⬇ ' + CQ[pi - 1] + ' 排除直连:' + EX.map(x => esc(x.v) + '(' + (x.m === 'cidr' ? '防火墙层' : MN[x.m]) + ')').join(' · ') + '</div>' }
-  pi++; pv += '<div class="hs-li">📋 ' + CQ[pi - 1] + ' 其余流量:按订阅规则分流,未命中走兜底</div>';
+  /* v2.9.7: 分流展示改河流分岔组件(ZCode v02 定稿)——数据快照,渲染由 renderRiver 在绑定后执行 */
+  const pv = riverMarkup(); /* v2.9.23 泳道定稿(模块渲染) */
   const curMode = C.s1;
   const quick = '<div class="hs-sec"><h4>终端代理 <span class="hs-hint">哪些设备走代理</span></h4>'
   + '<div class="hs-seg" id="hs_quick_s1" style="margin:4px 0">'
@@ -2974,15 +4107,16 @@ function paneSplit() {
   + '</div>';
   const saveBar = '<div class="hs-pghead"><span class="hs-hint" style="flex:1" id="hs_sp_dirty"></span><button class="btn hs-sm" id="hs_sp_discard">放弃</button><button class="btn hs-sm hs-pri" id="hs_sp_save">保存</button></div>';
   return saveBar + quick + '<div class="hs-hint" style="margin:0 2px 6px">本页与设置共用「保存」;预览为已生效配置;域名走 DIRECT 规则,网段走防火墙层排除</div>'
-  + '<div class="hs-sec"><h4>当前生效分流(优先级从上到下)</h4>' + pv + '</div>'
+  + '<div class="hs-sec"><h4>当前生效分流 <span class="hs-hint">哪段流量没进小海关、哪段进了引擎 · 点岔口或搜索定位</span></h4>' + pv + '</div>'
   + '<div class="hs-sec"><h4>自动兼容</h4>'
-  + R('自动兼容 EasyTier', '默认关闭,仅同装 EasyTier 时需要;开启时校验 ET 在位且其状态文件输出已打开', '<label class="hs-sw"><input type="checkbox" id="hs_set_cox" ' + ((D ? D.coexistAuto : C.coexistAuto) ? 'checked' : '') + '><span></span></label>')
+  + R('自动兼容 ET组网', '默认关闭,仅同装 ET组网(EasyTier)插件时需要;开启时校验 ET 在位且其状态文件输出已打开', '<label class="hs-sw"><input type="checkbox" id="hs_set_cox" ' + ((D ? D.coexistAuto : C.coexistAuto) ? 'checked' : '') + '><span></span></label>')
   + ((D ? D.coexistAuto : C.coexistAuto)
-    ? '<details class="hs-fold" id="hs_et_fold" style="margin:2px 0 8px"><summary style="padding:8px 12px;cursor:pointer;font-size:.76rem">📄 EasyTier 路由表 <span class="hs-hint">展开查看将被防火墙排除的网段与端口</span></summary><div id="hs_et_body" style="padding:2px 12px 10px"><div class="hs-hint">读取中…</div></div></details>'
+    ? '<details class="hs-fold" id="hs_et_fold" style="margin:2px 0 8px"><summary style="padding:8px 12px;cursor:pointer;font-size:.76rem">📄 ET组网 路由表 <span class="hs-hint">展开查看将被防火墙排除的网段与端口</span></summary><div id="hs_et_body" style="padding:2px 12px 10px"><div class="hs-hint">读取中…</div></div></details>'
     : '')
   + '</div>'
   + '<div class="hs-sec"><h4>国内直通 <span class="hs-hint">中国 IP 内核态放行不进代理,微信/QQ 等提速</span></h4>'
   + R('启用直通', '中国 IP 在防火墙层直接转发;需路由表;国内域名同时返回真实 IP 配合', '<label class="hs-sw"><input type="checkbox" id="hs_chn_sw" ' + (C.cnBypass !== false ? 'checked' : '') + '><span></span></label>')
+  + R('IPv6 响应（实验）', '默认关闭:DNS 不回 AAAA 记录,终端全走 v4。开启后 IPv6 DNS 恢复响应(域名可解析出 v6 地址,v6 可通);代价:v6 流量进入引擎处理,CPU 占用上升,设备可能变慢', '<label class="hs-sw"><input type="checkbox" id="hs_sw_v6dns" ' + (C.v6Dns ? 'checked' : '') + '><span></span></label>')
   + R('路由表', ST.chn >= 5000 ? '<span style="color:#66bb6a">已就绪</span> · v4 ' + ST.chn + ' 条'
       + ((ST.chn6 || 0) >= 20 ? ' · <span style="color:#66bb6a">v6 ' + ST.chn6 + ' 条</span>' : ' · <span style="color:#ffb74d">v6 缺失(内置三网大段兜底,建议补全)</span>')
       : '未安装(仅 mihomo 内部分流)', '<button class="btn hs-sm" id="hs_chn_dl">' + (ST.chn >= 5000 ? '重新下载' : '在线下载') + '</button>')
@@ -3065,14 +4199,15 @@ async function trySetSave() {
   const newEx = (d.exclude || []).map(lstKey), newFc = (d.force || []).map(lstKey);
   oldEx.forEach(x => { if (newEx.indexOf(x) < 0) chg.push('排除-删 ' + x) });
   newEx.forEach(x => { if (oldEx.indexOf(x) < 0) chg.push('排除-增 ' + x) });
-  oldFc.forEach(x => { if (newFc.indexOf(x) < 0) chg.push('强制-删 ' + x) });
-  newFc.forEach(x => { if (oldFc.indexOf(x) < 0) chg.push('强制-增 ' + x) });
+  oldFc.forEach(x => { if (newFc.indexOf(x) < 0) chg.push('强制直连-删 ' + x) });
+  newFc.forEach(x => { if (oldFc.indexOf(x) < 0) chg.push('强制直连-增 ' + x) });
   await saveConf(); await opLog('设置保存: ' + (chg.join('; ') || '无实际变化'));
   if (autoChanged || d.bootMode !== oldBm) { if (C.autostart) await bootEnable(); else await bootDisable() }
   renderPane();
   /* 分流规则(排除/强制)改动需重写 config 并热重载——此前只存 JSON 不重载,规则从未进引擎 */
   if (df.rules && ST.running && !df.restart) {
     const yaml = genConfigYaml();
+    if (yaml === null) { toast('⚠️ 订阅解析失败,分流改动未热重载(已保存,旧配置保留)', 'red'); return }
     await writeFile(CFG, yaml);
     const ok = await apiPut('/configs?force=true', { path: '', payload: yaml });
     if (ok) toast('✅ 分流规则已热重载生效', 'green');
@@ -3094,7 +4229,7 @@ async function guardLeaveSet() {
 async function askApplyNow(what) {
   if (!ST.running) { toast('已保存,下次启动时生效(启动含健康验证与自动回退)', 'green'); return }
   const ok = await confirmBox({
-    title: '配置已修改', html: '<div class="hs-hint">' + esc(what) + ' 需重启引擎才生效,现在平滑重启吗?<br><br>正式版流程:快照→应用→健康验证→失败自动回退。</div>',
+    title: '配置已修改', html: '<div class="hs-hint">' + esc(what) + ' 需重启引擎才生效,现在平滑重启吗?<br>正式版流程:快照→应用→健康验证→失败自动回退。</div>',
     okText: '立即重启'
   });
   if (ok) { await applyWithTxn(what); C._pending = false; renderMgrFoot(); renderAll() }
@@ -3126,7 +4261,7 @@ async function geoInstall(key, btn) {
   const gseq = dlSeq(GEO_BASE + g.file);
   for (let si = 0; si < gseq.length && !ok; si++) {
     btn.textContent = gseq[si].name + '下载中';
-    await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.geo.exit') + '; nohup sh -c \'curl -sL --connect-timeout 8 ' + (gseq[si].px ? '-x ' + shq(gseq[si].px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(gseq[si].url) + ' 2>/dev/null; echo $? > ' + shq(DIR + '/.geo.exit') + '\' >/dev/null 2>&1 &', 5000);
+    await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.geo.exit') + ' ' + shq(DIR + '/.geo.pid') + '; nohup sh -c \'curl -sL --connect-timeout 8 ' + (gseq[si].px ? '-x ' + shq(gseq[si].px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(gseq[si].url) + ' 2>/dev/null & echo $! > ' + shq(DIR + '/.geo.pid') + '; wait $!; echo $? > ' + shq(DIR + '/.geo.exit') + '\' >/dev/null 2>&1 &', 5000); /* F11: 记录自有 curl PID($!+wait),清理只杀自有 */
     let lastSz = -1, stag = 0;
     for (let t = 0; t < 60; t++) {
       await wait(1500);
@@ -3134,12 +4269,12 @@ async function geoInstall(key, btn) {
       if ((ex.content || '').trim() !== '') { if ((ex.content || '').trim() === '0') ok = true; break }
       const szR = await run('wc -c < ' + shq(tmpF) + ' 2>/dev/null', 3000);
       const sz = pInt(szR);
-      if (sz === lastSz) { stag++; if (stag >= 8) { await run('for P in $(pidof curl); do kill $P; done 2>/dev/null', 3000); break } }
+      if (sz === lastSz) { stag++; if (stag >= 8) { await run(killOwnDl(DIR + '/.geo.pid', DIR + '/.geo.exit'), 8000); break } }
       else { stag = 0; lastSz = sz }
       if (t % 3 === 0) btn.textContent = (sz / 1048576).toFixed(1) + 'MB';
     }
   }
-  await run('rm -f ' + shq(DIR + '/.geo.exit') + '; for P in $(pidof curl); do kill $P; done 2>/dev/null', 3000);
+  await run(killOwnDl(DIR + '/.geo.pid', DIR + '/.geo.exit') + '; rm -f ' + shq(DIR + '/.geo.exit'), 8000); /* F11: 先杀自有(exit 已写则跳过,防 PID 复用误杀),再清 exit 哨兵 */
   if (!ok) {
     const szR = await run('wc -c < ' + shq(tmpF) + ' 2>/dev/null', 3000);
     if ((pInt(szR)) > g.min) ok = true;
@@ -3190,7 +4325,7 @@ async function chnInstall(btn) {
     const cseq = cdnSeq.concat(dlSeq(CHN_BASE + cf.url));
     for (let si = 0; si < cseq.length && !ok; si++) {
       const srcName = cseq[si].name;
-      await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.chn.exit') + '; nohup sh -c \'curl -sL --connect-timeout 8 -m 60 ' + (cseq[si].px ? '-x ' + shq(cseq[si].px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(cseq[si].url) + ' 2>/dev/null; echo $? > ' + shq(DIR + '/.chn.exit') + '\' >/dev/null 2>&1 &', 5000);
+      await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.chn.exit') + ' ' + shq(DIR + '/.chn.pid') + '; nohup sh -c \'curl -sL --connect-timeout 8 -m 60 ' + (cseq[si].px ? '-x ' + shq(cseq[si].px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(cseq[si].url) + ' 2>/dev/null & echo $! > ' + shq(DIR + '/.chn.pid') + '; wait $!; echo $? > ' + shq(DIR + '/.chn.exit') + '\' >/dev/null 2>&1 &', 5000); /* F11: 记录自有 curl PID($!+wait),清理只杀自有 */
       let lastSz = -1, stag = 0;
       for (let t = 0; t < 45; t++) {
         await wait(1000);
@@ -3201,14 +4336,14 @@ async function chnInstall(btn) {
         prog('⬇ ' + cf.name + ' · 源' + (si + 1) + '/' + cseq.length + ' ' + esc(srcName) + ' · ' + (sz / 1024).toFixed(1) + 'KB');
         /* v1.8.8: 停滞阈值 10→6(≈9 秒无字节即换源)——raw.githubusercontent 空挂每次白等 15-25s;
            误杀慢源由"下一源重试+最终 wc -l 复测"兜底 */
-        if (sz === lastSz) { stag++; if (stag >= 6) { await run('for P in $(pidof curl); do kill $P; done 2>/dev/null', 3000); break } }
+        if (sz === lastSz) { stag++; if (stag >= 6) { await run(killOwnDl(DIR + '/.chn.pid', DIR + '/.chn.exit'), 8000); break } }
         else { stag = 0; lastSz = sz }
       }
       if (!ok) {
         const lc = await run('wc -l < ' + shq(tmpF) + ' 2>/dev/null', 5000);
         if ((pInt(lc)) >= cf.minLines) ok = true;
       }
-      await run('rm -f ' + shq(DIR + '/.chn.exit'), 3000);
+      await run('rm -f ' + shq(DIR + '/.chn.exit') + ' ' + shq(DIR + '/.chn.pid'), 3000);
       if (!ok) await run('rm -f ' + shq(tmpF), 3000);
     }
     /* v1.8.4: v4 失败不再 break——此前顺序中断导致 china6 永远没机会尝试(审计 P0 伴生) */
@@ -3216,7 +4351,7 @@ async function chnInstall(btn) {
     await run('mv ' + shq(tmpF) + ' ' + shq(dst), 5000);
     progEnd('✅ ' + cf.name + ' 已下载', true);
   }
-  await run('rm -f ' + shq(DIR + '/.chn.exit') + '; for P in $(pidof curl); do kill $P; done 2>/dev/null', 3000);
+  await run(killOwnDl(DIR + '/.chn.pid', DIR + '/.chn.exit') + '; rm -f ' + shq(DIR + '/.chn.exit'), 8000); /* F11: 先杀自有(exit 已写则跳过,防 PID 复用误杀),再清 exit 哨兵 */
   await collectStatus();
   hsChnBusy = false; btn.disabled = false; btn.textContent = old;
   if (ST.chn >= CHN_FILES[0].minLines || (ST.chn6 || 0) >= 20) {
@@ -3414,10 +4549,11 @@ async function upgradeAudit() {
   }
   ST.upgradePending = old; /* 齐备时置空数组,诊断凭 undefined 区分"未检测"与"已检测";诊断页同源展示 */
   if (!old.length) return;
-  const msg = '检测到旧版接管组件(' + old.join('/') + ' → ' + V + '),请在配置页完成升级';
-  if (typeof createToast === 'function') createToast('⚠️ ' + msg, 'pink', 9000);
+  /* v2.8.10: 通俗化提示(用户定调)——升级入口=卡片「⬆️待升级」徽标/配置页升级卡,非重启引擎 */
+  const msg = '小海关已更新到 v' + V + ',点击卡片「⬆️ 待升级」完成升级';
+  if (typeof createToast === 'function') createToast('⬆️ ' + msg, 'pink', 9000);
   else console.log('[小海关] ' + msg);
-  await opLog('升级对账:' + old.join(',') + '(→v' + V + '),待重启引擎');
+  await opLog('升级对账:' + old.join(',') + '(→v' + V + '),待升级(卡片徽标入口)');
 }
 /* 升级弹卡: 打开配置页时若待升级弹一次(每页面会话一次),列更新内容+一键升级 */
 let HS_UPG_POPPED = false;
@@ -3426,8 +4562,9 @@ function upgradeCardHtml() {
   const entries = Object.keys(CHANGELOG).filter(k => verCmp(k, from) > 0)
     .sort((a, b) => verCmp(b, a)).map(k => '<li style="margin:3px 0"><b>' + k + '</b> ' + esc(CHANGELOG[k]) + '</li>').join('');
   const rolledNote = (C.upgBackup && C.upgBackup.rolledBack) ? '<div class="hs-hint" style="margin-bottom:6px;color:#ffb74d">⚠️ 你此前回滚过(' + esc(C.upgBackup.rolledFrom || '?') + ' 之后),新版本可能已修复当时的问题。</div>' : '';
-  return rolledNote + '<div class="hs-hint" style="margin-bottom:6px">盘上接管组件为 <b>' + esc(from) + '</b>,当前插件 <b>' + V + '</b>。插件已是新版,但设备上的接管组件(内核配置/防火墙/启动脚本)仍是旧版——重启引擎即完成更新(几秒,期间接管短暂中断)。本次更新内容:</div>'
-    + (entries ? '<ul style="margin:4px 0 8px;padding-left:18px;font-size:.72rem;line-height:1.5">' + entries + '</ul>' : '')
+  return rolledNote + (entries
+    ? '<ul style="margin:4px 0 8px;padding-left:18px;font-size:.72rem;line-height:1.5">' + entries + '</ul>'
+    : '<div class="hs-hint" style="margin:6px 0">问题修复与体验改进</div>')
     /* 打开配置按钮: 徽标/单按钮入口弹卡时给用户进入配置的通路(否则单按钮模式点稍后=无法再进配置);
        mgr 顶层自动弹出时隐藏——已身在配置面板 */
     + '<div style="display:flex;gap:8px"><button class="btn hs-pri" id="hs_upg_go" style="flex:1.4">⬆️ 立即升级</button>'
@@ -3540,11 +4677,12 @@ async function doUpgradeRestart(btn) {
           const rbFrom = C.upgBackup.from;
           C.upgBackup.rolledBack = true; C.upgBackup.rolledFrom = V;
           await saveConf();
-          await run('rm -rf ' + shq(UBAK), 5000);
-          await engineRestart();
+          /* F12: 恢复模式启动(跳过重生成,不覆盖刚恢复的三件套);验证成功后才清备份(失败保留可重试) */
+          const rbOk = await engineRestart(true);
+          if (rbOk) await run('rm -rf ' + shq(UBAK), 5000);
           ST.upgradePending = []; ST.upgradeFrom = rbFrom;
-          toast('升级失败已自动回滚到 v' + rbFrom + '(如需重试请重启引擎)', 'orange');
-          await opLog('升级失败自动回滚到 ' + rbFrom);
+          toast(rbOk ? '升级失败已自动回滚到 v' + rbFrom + '(如需重试请重启引擎)' : '升级失败,备份文件已恢复但引擎未就绪(备份保留,可再点重启)', rbOk ? 'orange' : 'red');
+          await opLog(rbOk ? '升级失败自动回滚到 ' + rbFrom : '自动回滚未通过恢复复核,备份保留:' + (HS_LAST_ERR || '引擎未就绪'));
           renderPane(); renderMgrFoot(); renderCard(); /* 回滚后同样即时刷新 */
         } else {
           toast('升级失败且回滚异常,请手动重启引擎', 'red');
@@ -3567,13 +4705,20 @@ async function rollbackUpgrade() {
   if (!okc) return;
   await op(null, async () => {
     const cp = await run('cp ' + shq(UBAK) + '/fw.sh ' + shq(FW) + ' && cp ' + shq(UBAK) + '/start.sh ' + shq(START) + ' && cp ' + shq(UBAK) + '/config.yaml ' + shq(CFG) + ' 2>&1; echo R=$?', 8000);
-    if (!/R=0/.test(cp.content || '')) { toast('备份恢复失败(文件缺失?)', 'red'); return }
+    /* F12: 原正则字面量内含 0x08 退格字节(模式实为 R\b=0\b),真实输出 R=0 恒不匹配——
+       恢复成功被误判失败提前 return(核验 R01 红灯);本行重写清除隐形字节 */
+    HS_UPGRADING = true; /* F12: 恢复期间与升级同防——syncLineRules 线路热重载/外部 reapplyFw
+       并发在此窗口会 genConfigYaml 重写 CFG,覆盖刚恢复的备份(collectStatus 探活必经它) */
+    try {
+    if (!/R=0/.test(cp.content || '')) { toast('备份恢复失败(文件缺失?)', 'red'); return }
     C.upgBackup.rolledBack = true; C.upgBackup.rolledFrom = V;
     await saveConf();
-    await run('rm -rf ' + shq(UBAK), 5000); /* 已恢复,备份即清(单份不留) */
-    await engineRestart();
+    /* F12: 恢复模式启动(不重新生成三件套);验证成功后才清备份 */
+    const rbOk = await engineRestart(true);
+    if (rbOk) await run('rm -rf ' + shq(UBAK), 5000); /* 已恢复且复核通过,备份即清(单份不留) */
     ST.upgradePending = []; ST.upgradeFrom = C.upgBackup.from;
-    await opLog('已回滚到 ' + C.upgBackup.from + ',降级运行(新版本插件发布前不再提示升级)');
+    await opLog(rbOk ? '已回滚到 ' + C.upgBackup.from + ',降级运行(新版本插件发布前不再提示升级)' : '回滚文件已恢复但引擎未就绪(备份保留,可重试):' + (HS_LAST_ERR || ''));
+    } finally { HS_UPGRADING = false }
   }, null, '回滚中…');
   renderMgrFoot(); renderCard();
 }
@@ -3584,13 +4729,14 @@ function bindPane(tab, p) {
   const fillEt = () => readEtState().then(() => {
     const b = $('#hs_et_body'); if (!b) return;
     if (!ET_CACHE) {
-      b.innerHTML = '<div class="hs-hint">未读取到 EasyTier 状态' + (ET_ERR ? '<br>原因: ' + esc(ET_ERR) : '(检查 ET 的「状态文件输出」是否开启)') + '</div>';
-      if (ET_ERR) opLog('ET路由表读取失败: ' + ET_ERR);
+      b.innerHTML = '<div class="hs-hint">未读取到 ET组网 状态' + (ET_ERR ? '<br>原因: ' + esc(ET_ERR) : '(检查 ET 的「状态文件输出」是否开启)') + '</div>';
+      if (ET_ERR && ET_ERR !== ET_ERR_LOGGED) { opLog('ET路由表读取失败: ' + ET_ERR); ET_ERR_LOGGED = ET_ERR } /* v2.7.21: 同错误只记一次 */
+      else if (!ET_ERR) ET_ERR_LOGGED = '';
       return
     }
     const j = ET_CACHE;
     b.innerHTML =
-      '<div class="hs-li">' + (j.active ? '<span style="color:#66bb6a">● 组网运行中</span>' : '<span style="color:#9aa3b2">● 组网未运行</span>') + ' · 更新于 ' + esc(j.updated || '?') + '</div>'
+      '<div class="hs-li">' + (j.active ? '<span style="color:#66bb6a">● 组网运行中</span>' : '<span style="color:#b3bdcb">● 组网未运行</span>') + ' · 更新于 ' + esc(j.updated || '?') + '</div>'
       + (j.tun ? '<div class="hs-li">TUN 网卡: <b>' + esc(j.tun) + '</b></div>' : '')
       + '<div class="hs-li">网段 ' + ((j.cidrs || []).length) + ' 条(防火墙层排除,不进代理):</div>'
       + '<div style="padding:2px 0 4px 12px;display:flex;flex-wrap:wrap;gap:6px">' + ((j.cidrs || []).map(c => '<span class="hs-hint hs-badge">' + esc(c) + '</span>').join('') || '<span class="hs-hint">无</span>') + '</div>'
@@ -3628,16 +4774,28 @@ function bindPane(tab, p) {
     });
 
   if (tab === 'ov') {
+    /* v2.7.24: 设备区渲染/绑定已归一 ovDevSecHtml+bindOvDev,⟳局部刷新 */
+    /* v2.7.6 修复: 升级备份「清理」按钮绑定误挂在 set 分支(按钮渲染在总览页)→ 从来点不响应;
+     归位到 ov 分支(用户实锤从未生效) */
+    const bc0 = p.querySelector('#hs_bak_clean');
+    if (bc0) bc0.onclick = async () => {
+      const okc = await confirmBox({ title: '清理升级备份', danger: true, okText: '清理', html: '<div class="hs-hint">删除 ' + esc(C.upgBackup ? C.upgBackup.from : '') + ' 的组件备份?清理后将无法回滚到该版本。</div>' });
+      if (!okc) return;
+      await op(null, async () => { await run('rm -rf ' + shq(UBAK), 5000); C.upgBackup = null; await saveConf(); toast('升级备份已清理', 'green'); await opLog('手动清理升级备份'); renderPane(); }, null, '清理中…');
+    };
     p.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copyTo(b.dataset.copy));
-    /* 接入设备行:点击展开/收起该设备活动连接 */
-    p.querySelectorAll('.hs-dev-hd').forEach(hd => hd.onclick = () => {
-      const cons = hd.parentElement && hd.parentElement.querySelector('.hs-dev-cons');
-      const chev = hd.querySelector('span:last-child');
-      if (!cons) return;
-      const open = cons.style.display !== 'none';
-      cons.style.display = open ? 'none' : 'block';
-      if (chev) chev.style.transform = open ? '' : 'rotate(90deg)';
-    });
+    /* v2.7.24: 设备区绑定归一 bindOvDev(局部刷新后可重挂);⟳局部刷新——只重采+重渲染
+       #hs_ov_dev 容器,不整页 renderPane(用户定调:别动页签其他区域) */
+    bindOvDev(p);
+    const odrf = p.querySelector('#hs_dev_rf');
+    if (odrf) odrf.onclick = async () => {
+      odrf.disabled = true; odrf.textContent = '⟳…';
+      await collectStatus();
+      const cs = await getConnectionStats();
+      const box = $('#hs_ov_dev');
+      if (box) { box.innerHTML = ovDevSecHtml(cs); bindOvDev(box); }
+      toast('设备与活动连接已刷新(仅本区)', 'green');
+    };
     p.querySelectorAll('#hs_seg_s1 button').forEach(b => b.onclick = async () => {
       if (!ST.running) { toast('请先启动引擎(底部操作栏)', 'red'); return }
       if (b.dataset.v === C.s1) return;
@@ -3683,10 +4841,10 @@ function bindPane(tab, p) {
   }
   if (tab === 'sub') {
     const mb = p.querySelector('#hs_sub_manual'); if (mb) mb.onclick = () => openManualDlg();
-    const an = p.querySelector('#hs_sub_addnode'); if (an) an.onclick = () => openAddNodeDlg();
+    /* v2.7.11: 「添加节点」与「手动节点」两弹窗功能重复(用户分不清)——合并单入口「自建节点」,openAddNodeDlg 入口移除 */
     /* 注意: 标志必须用模块级变量,不能挂在 HS_MANUAL 上——refreshManual 会整体替换数组,挂在数组上的属性会随旧数组丢失,曾导致无限重渲染循环(页面按钮/输入全失灵) */
     if (!HS_MANUAL_LOADED) { HS_MANUAL_LOADED = true; refreshManual().then(() => { if (hsTab === 'sub') renderPane() }).catch(() => { HS_MANUAL_LOADED = false }) }
-    if (C.activeSub >= 0 && HS_SUBINFO === undefined) refreshSubInfo().then(() => { if (HS_SUBINFO && hsTab === 'sub') renderPane() });
+    if (C.subs.length && HS_SUBINFO_ALL === undefined) refreshSubInfo().then(() => { if (HS_SUBINFO_ALL && hsTab === 'sub') renderPane() });
     p.querySelectorAll('[data-subupd]').forEach(b => b.onclick = async () => {
       const i = +b.dataset.subupd, sb = C.subs[i];
       const oldT = b.textContent;
@@ -3694,8 +4852,8 @@ function bindPane(tab, p) {
       const dl = await downloadSub(i);
       b.disabled = false; b.textContent = oldT;
       if (!dl) { toast('❌ 「' + sb.name + '」下载失败(检查网络/URL)', 'red'); return }
-      if (i === C.activeSub && ST.running) {
-        await applyWithTxn('更新订阅「' + sb.name + '」');
+      if (subEffective(i) && ST.running) {
+        await applyWithTxn('更新订阅「' + sb.name + '」'); /* v2.7.0: 融合下非激活订阅也是生效节点池,同样热重载(审查问题3) */
       } else {
         toast('✅ 「' + sb.name + '」已下载,切换使用时生效', 'green');
       }
@@ -3710,7 +4868,24 @@ function bindPane(tab, p) {
       }, '✅ 订阅已切换并生效');
     });
     p.querySelectorAll('[data-subedit]').forEach(b => b.onclick = () => { HS_SUB_EDIT = +b.dataset.subedit; renderPane() });
-    const sCancel = p.querySelector('#hs_sub_cancel'); if (sCancel) sCancel.onclick = () => { HS_SUB_EDIT = -1; renderPane() };
+    /* v2.7.0: 节点过滤弹窗 + 多订阅融合开关 */
+    p.querySelectorAll('[data-subflt]').forEach(b => b.onclick = () => openSubFilterDlg(+b.dataset.subflt));
+    const fusEl = p.querySelector('#hs_sub_fusion');
+    if (fusEl) fusEl.onchange = async () => {
+      const on = fusEl.checked;
+      await op(null, async () => {
+        C.subFusion = on; await saveConf();
+        if (ST.running) {
+          await refreshSubRaw(); /* 融合预热:genConfigYaml 同步函数读不了文件,先预载全部订阅原文 */
+          const ok = await saveConfReload(); if (!ok) throw new Error('热重载失败')
+        }
+        await opLog('多订阅节点融合' + (on ? '开启' : '关闭'));
+      }, '✅ 融合已' + (on ? '开启:全部订阅节点合并进池(带订阅前缀)' : '关闭:仅激活订阅生效'));
+      renderPane();
+    };
+    const sCancel = p.querySelector('#hs_sub_cancel'); if (sCancel) sCancel.onclick = () => { HS_SUB_EDIT = -1; HS_SUB_NEW = false; renderPane() };
+    /* v2.7.10 补绑定(上批 edit 整批回滚丢失): ＋添加订阅→顶部插入新建卡 */
+    const newBtn = p.querySelector('#hs_sub_newbtn'); if (newBtn) newBtn.onclick = () => { HS_SUB_NEW = true; HS_SUB_EDIT = -1; renderPane(); setTimeout(() => { const inp = p.querySelector('#hs_sub_name'); if (inp) inp.focus() }, 60) };
     p.querySelectorAll('[data-subdel]').forEach(b => b.onclick = async () => {
       const sb = C.subs[+b.dataset.subdel];
       const ok = await confirmBox({ title: '删除订阅', html: '<div class="hs-hint">确定删除「' + esc(sb.name) + '」?</div>', okText: '删除', danger: true });
@@ -3728,6 +4903,8 @@ function bindPane(tab, p) {
     const ab = p.querySelector('#hs_sub_add'); if (ab) ab.onclick = async () => {
       const n = p.querySelector('#hs_sub_name').value.trim(), u = p.querySelector('#hs_sub_url').value.trim();
       if (!n || !u) { toast('请填写名称和订阅链接', 'red'); return }
+      /* 审查P2-3: 订阅 URL 协议白名单——file:// 等可读本地文件,明确拒绝 */
+      if (!/^https?:\/\//.test(u)) { toast('订阅链接必须以 http:// 或 https:// 开头', 'red'); return }
       /* 编辑态:链接未变只改名;变了则先落新值试下载,失败回滚保旧链接 */
       if (HS_SUB_EDIT >= 0 && C.subs[HS_SUB_EDIT]) {
         const i = HS_SUB_EDIT, sb = C.subs[i];
@@ -3751,6 +4928,7 @@ function bindPane(tab, p) {
         await saveConf();
         const dlok = await downloadSub(C.activeSub);
         if (dlok && ST.running) await applyWithTxn('添加订阅');
+        HS_SUB_NEW = false; /* v2.7.10 补(上批回滚丢): 新建卡保存后关闭 */
       }, '✅ 订阅已添加并生效');
       renderPane();
     };
@@ -3774,12 +4952,38 @@ function bindPane(tab, p) {
     const chnSw = p.querySelector('#hs_chn_sw'); if (chnSw) chnSw.onchange = e => {
       op(null, async () => { C.cnBypass = e.target.checked; await saveConf(); if (ST.running) await reapplyFw() }, '✅ 国内直通已' + (e.target.checked ? '开启' : '关闭'), '应用直通规则中…');
     };
+    /* v2.8.2: IPv6 响应实验开关——开启前警告(v6 流量入引擎,CPU 代价);取消则回滚开关 */
+    const v6sw = p.querySelector('#hs_sw_v6dns'); if (v6sw) v6sw.onchange = e => {
+      const on = e.target.checked;
+      if (on) {
+        const okc = confirmBox({ title: '开启 IPv6 响应', danger: true, okText: '仍要开启', html: '<div class="hs-hint">开启后 DNS 将回 AAAA 记录,IPv6 可通。<br>⚠ v6 流量会进入引擎处理,设备 CPU 占用可能明显上升;若日常无需 IPv6,建议保持关闭。</div>' });
+        pr = okc;
+      } else pr = true;
+      if (!pr) { e.target.checked = !on; return }
+      op(null, async () => {
+        C.v6Dns = on; await saveConf();
+        if (ST.running) { const okr = await saveConfReload(); if (!okr) throw new Error('热重载失败') }
+      }, on ? '✅ IPv6 响应已开启' : 'IPv6 响应已关闭(v4 模式)');
+    };
     /* 分流页草稿保存栏 */
     const spsv = p.querySelector('#hs_sp_save'); if (spsv) spsv.onclick = async () => { await trySetSave() };
     const spdc = p.querySelector('#hs_sp_discard'); if (spdc) spdc.onclick = () => { SET_DRAFT = null; toast('已放弃全部修改', 'green'); renderPane() };
     /* v2.2.1: 设备区手动刷新(用户定调:不实时,手动/切页刷新)——活动连接数据随 paneSplit 整页采集,走 renderPane 同路径 */
+    const rvCtx = { C: C, ST: ST, ET: ET_CACHE, EX: (SET_DRAFT && SET_DRAFT.exclude) || C.exclude || [], FC: (SET_DRAFT && SET_DRAFT.force) || C.force || [], game: HS_GAME_DOMAINS, esc: esc, toast: toast, run: run, apiGet: apiGet, act: riverAct, restStats: riverRestStats, deepRest: riverDeepRest, mountLive: riverMountLive, exitLive: null }; /* v2.9.43: 兜底全链异步补 */
+    if (ST.running) riverLiveExit().then(function (ex2) { rvCtx.exitLive = ex2; if (hsTab === 'split') riverRender(rvCtx) }).catch(function () { }); /* 链就绪后局部重绘 */
+    const rvState = riverRender(rvCtx); /* v2.9.23 泳道定稿(模块渲染;容器ResizeObserver自适应,旧resize钩子废弃) */
+    if (C.coexistAuto && !(rvState && rvState.etActive)) {
+      /* v2.9.24: ET 缓存未就绪——读取完成后补刷一次(用户正在搜索输入时不打扰) */
+      readEtState().then(() => {
+        if (hsTab !== 'split') return;
+        const qi = document.getElementById('hs_rv_q');
+        if (qi && qi.value) return;
+        rvCtx.ET = ET_CACHE;
+        riverRender(rvCtx);
+      }).catch(() => { });
+    }
     const drf = p.querySelector('#hs_dev_rf');
-    if (drf) drf.onclick = async () => { drf.style.opacity = '.5'; await renderPane(); toast('设备与活动连接已刷新', 'green') };
+    if (drf) drf.onclick = async () => { drf.style.opacity = '.5'; await refreshDevPane(); toast('设备已刷新(仅本区)', 'green'); drf.style.opacity = '1' }; /* v2.9.1: 局部刷新,不整页 */
     /* v2.1.10 修复:「自动兼容 EasyTier」开关渲染在分流页(paneSplit),绑定此前误放 set 分支——
        set 页无此元素被空守卫静默跳过,onchange 永不挂上:开关只动 UI、草稿不更新(无法保存)、
        etCheck 三级自检永不触发(用户真机实测"打开后无法保存,也没有自我检查")。绑定归位到 split 分支 */
@@ -3796,16 +5000,16 @@ function bindPane(tab, p) {
         if (row && oldT != null) row.querySelector('.hs-st').textContent = oldT;
         e.target.checked = false;
         if (r === 'noinstall') {
-          const pr = confirmBox({ title: '未检测到 EasyTier 插件', html: '<div class="hs-hint">未同装两者时无需此功能,开关保持关闭即可。<br><br>若你确认已安装 EasyTier,请检查其是否完整安装(内核文件在位)后重试。</div>', okText: '知道了', cancelText: '关闭' });
+          const pr = confirmBox({ title: '未检测到 ET组网 插件', html: '<div class="hs-hint">未同装两者时无需此功能,开关保持关闭即可。<br>若你确认已安装 ET组网,请检查其是否完整安装(内核文件在位)后重试。</div>', okText: '知道了', cancelText: '关闭' });
           await pr; syncBar(); return
         }
         if (r === 'nostate') {
           const pr = confirmBox({
-            title: '需先在 EasyTier 开启状态输出',
+            title: '需先在 ET组网 开启状态输出',
             html: '<div class="hs-hint">按以下步骤操作后,再回来开启本开关:</div>'
-            + '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem"><span>①</span><span>打开 EasyTier 插件,进入 设置</span></div>'
+            + '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem"><span>①</span><span>打开 ET组网 插件,进入 设置</span></div>'
             + '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem"><span>②</span><span>找到并开启开关:<b>「状态文件输出」</b><div class="hs-hint">供第三方代理读取自动排除组网流量</div></span></div>'
-            + '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem"><span>③</span><span>回到小海关 分流页,再打开「自动兼容 EasyTier」</span></div>'
+            + '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem"><span>③</span><span>回到小海关 分流页,再打开「自动兼容 ET组网」</span></div>'
             + '<div style="margin-top:8px;text-align:left"><button class="btn hs-sm" id="hs_cox_copy">复制开关名</button></div>',
             okText: '知道了', cancelText: '关闭'
           });
@@ -3814,12 +5018,12 @@ function bindPane(tab, p) {
           await pr; syncBar(); return
         }
         if (r === 'badstate') {
-          const pr = confirmBox({ title: 'EasyTier 状态文件异常', html: '<div class="hs-hint">文件存在但读不到有效路由(网段/端口)。<br>请到 EasyTier 插件重新开关一次「状态文件输出」后再试。</div>', okText: '知道了', cancelText: '关闭' });
+          const pr = confirmBox({ title: 'ET组网 状态文件异常', html: '<div class="hs-hint">文件存在但读不到有效路由(网段/端口)。<br>请到 ET组网 插件重新开关一次「状态文件输出」后再试。</div>', okText: '知道了', cancelText: '关闭' });
           await pr; syncBar(); return
         }
         e.target.checked = true; setDraft().coexistAuto = true;
         await readEtState();
-        if (ET_CACHE && ET_CACHE.active === false) toast('✅ 校验通过;注 EasyTier 当前未运行,组网启动后重启引擎即可生效', 'pink');
+        if (ET_CACHE && ET_CACHE.active === false) toast('✅ 校验通过;注 ET组网 当前未运行,组网启动后重启引擎即可生效', 'pink');
         else toast('✅ 校验通过:已读取 ET 路由(' + ((ET_CACHE && ET_CACHE.cidrs) || []).length + ' 网段/' + ((ET_CACHE && ET_CACHE.p2p_ports) || []).length + ' 端口),保存后生效', 'green');
       } else { setDraft().coexistAuto = false }
       syncBar();
@@ -3858,16 +5062,12 @@ function bindPane(tab, p) {
       const info = await fetchLatestInfo();
       if (info.tag && C.ver && info.tag.slice(1) === C.ver) { toast('已是最新: v' + C.ver, 'green'); return }
       if (info.tag) {
-        const okc = await confirmBox({ title: '发现新版本', html: '<div class="hs-hint">当前 v' + esc(C.ver || '?') + ' → 最新 <b>' + esc(info.tag) + '</b><br><br>直接替换不保留旧版。</div>', okText: '在线更新' });
+        const okc = await confirmBox({ title: '发现新版本', html: '<div class="hs-hint">当前 v' + esc(C.ver || '?') + ' → 最新 <b>' + esc(info.tag) + '</b><br>直接替换不保留旧版。</div>', okText: '在线更新' });
         if (okc) { onlineInstall() }
       } else { toast('无法获取版本(GitHub 不通);可手动下载后上传', 'red') }
     };
     const uc2 = p.querySelector('#hs_up_core'); if (uc2) uc2.onclick = uploadCore;
-    const bc = p.querySelector('#hs_bak_clean'); if (bc) bc.onclick = async () => {
-      const okc = await confirmBox({ title: '清理升级备份', danger: true, okText: '清理', html: '<div class="hs-hint">删除 ' + esc(C.upgBackup ? C.upgBackup.from : '') + ' 的组件备份?清理后将无法回滚到该版本。</div>' });
-      if (!okc) return;
-      await op(null, async () => { await run('rm -rf ' + shq(UBAK), 5000); C.upgBackup = null; await saveConf(); toast('升级备份已清理', 'green'); await opLog('手动清理升级备份'); renderPane(); }, null, '清理中…');
-    };
+    const bc = p.querySelector('#hs_bak_clean'); if (bc) bc.onclick = null; /* v2.7.6: 绑定已归位 ov 分支(按钮只渲染在总览页),此处残留置空防误绑 */
     p.querySelectorAll('[data-port]').forEach(inp => {
       const k = inp.dataset.port;
       inp.oninput = () => {
@@ -3937,8 +5137,8 @@ function bindPaneLog(p) {
       HS_DEBUG_TIMER = setTimeout(async () => {
         if (C.logLevel !== 'debug') return; /* v1.8.5: 用户中途改级别后不再被 10 分钟定时器覆盖 */
         C.logLevel = 'info'; await saveConf();
-        const yml = genConfigYaml(); await writeFile(CFG, yml);
-        await apiPut('/configs?force=true', { path: '', payload: yml });
+        const yml = genConfigYaml();
+        if (yml !== null) { await writeFile(CFG, yml); await apiPut('/configs?force=true', { path: '', payload: yml }); }
         toast('debug日志已自动切回info(限时10分钟)', 'green'); await opLog('debug限时到点,热切回info');
       }, 600000);
     }
@@ -4022,6 +5222,61 @@ async function fetchLatestInfo() {
   }
   return info || { tag: '', url: '' };
 }
+/* ================= v2.9.0 场景4: 首次安装引导(5 步向导) =================
+   触发: init 检测零配置(无内核/无订阅/无设备);每步实时检测完成度,
+   全部完成自动关闭并提示"可以上网了";可随时点右上✕跳过(下次刷新不再弹——
+   用户完成任一步或手动关弣即写标记) */
+let HS_FRG = null;
+function firstRunDone() { try { localStorage.setItem('hs_frg_done', '1') } catch (e) { } }
+async function openFirstRunGuide() {
+  HS_FRG = { step: 0 };
+  await collectStatus();
+  renderFRG();
+}
+async function frgCheck() {
+  /* 各步完成度检测(实时) */
+  await collectStatus();
+  await readEtState().catch(() => { });
+  const s1 = !!ST.bin; /* ①内核 */
+  const s2 = (C.subs || []).length > 0 || HS_MANUAL.length > 0; /* ②订阅/自建节点 */
+  const s3 = ST.running; /* ③引擎 */
+  const s4 = C.s1 === 'all' || (C.devices || []).some(d => d.proxy); /* ④接管配置 */
+  let s5 = false;
+  if (ST.running) { const cs = await getConnectionStats(); s5 = !!(cs && cs.total > 0) } /* ⑤有流量=上网了 */
+  return [s1, s2, s3, s4, s5];
+}
+function renderFRG() {
+  if (!HS_FRG) return;
+  frgCheck().then(st => {
+    const steps = [
+      ['① 安装内核', '下载 mihomo 引擎(约 20MB)', st[0]],
+      ['② 添加订阅', '粘贴机场订阅链接,或用自建节点', st[1]],
+      ['③ 启动引擎', '一键启动,等待就绪', st[2]],
+      ['④ 选择设备', '勾选要走代理的设备(或切全部终端)', st[3]],
+      ['⑤ 验证联网', '设备产生流量,代理生效', st[4]]
+    ];
+    const allDone = st.every(Boolean);
+    if (allDone) { firstRunDone(); toast('🎉 全部完成!接入设备已可以上网', 'green', 5000); HS_FRG = null; renderPane(); return }
+    const cur = st.findIndex(x => !x);
+    let h = '<div class="hs-hint" style="margin-bottom:10px">按步骤完成配置,完成后自动进入下一步;点 ✕ 可跳过(不会再次弹出)</div>';
+    steps.forEach((sp, i) => {
+      const ic = sp[2] ? '✅' : (i === cur ? '◐' : '⚪');
+      const hl = i === cur ? 'color:#7fc9f2;font-weight:700' : (sp[2] ? 'color:#8fe39a' : '');
+      h += '<div class="hs-li" style="align-items:center"><span style="flex:none;font-size:1rem;margin-right:8px">' + ic + '</span><div style="flex:1"><div style="font-size:.78rem;' + hl + '">' + sp[0] + '</div><div class="hs-hint" style="font-size:.64rem">' + sp[1] + '</div></div>'
+      + (i === cur ? '<button class="btn hs-sm hs-pri" id="hs_frg_go">前往</button>' : '') + '</div>';
+    });
+    hsOpenSimple('🚀 新手引导', h);
+    const go = document.getElementById('hs_frg_go');
+    if (go) go.onclick = () => {
+      firstRunDone(); /* 用户主动前往即不再弹 */
+      HS_FRG = null; hsClose('hs_modal_simple');
+      if (cur === 0) { detectArch().then(() => openInstallGuide()) }
+      else openMgr(cur === 1 ? 'sub' : cur === 3 ? 'split' : 'ov');
+    };
+    /* 5 秒后自动复查(引导打开期间) */
+    if (HS_FRG) setTimeout(() => { if (HS_FRG) renderFRG() }, 5000);
+  });
+}
 function openInstallGuide(afterFail) {
   /* v2.1.4: 安装进行中不覆盖进度窗内容(hsOpenSimple 换 innerHTML 会毁掉进度 DOM,下载流程变全盲);
      失败回跳 afterFail 例外——彼时流程已走完,仅 finally 未及复位 busy */
@@ -4032,7 +5287,7 @@ function openInstallGuide(afterFail) {
   const direct = 'https://github.com/MetaCubeX/mihomo/releases/latest';
   const html =
   '<div style="text-align:center;padding:6px 0 2px">'
-  + '<div style="font-size:.76rem;color:#9aa3b2;margin-bottom:12px">设备架构:<b style="color:#7fc9f2">' + esc(arch) + '</b> · 需要文件:<b style="color:#bcd2ff">' + fname + '</b></div>'
+  + '<div style="font-size:.76rem;color:#b3bdcb;margin-bottom:12px">设备架构:<b style="color:#7fc9f2">' + esc(arch) + '</b> · 需要文件:<b style="color:#bcd2ff">' + fname + '</b></div>'
   + '<div style="display:flex;flex-direction:column;gap:8px">'
   + (afterFail ? '<div style="margin-bottom:10px;padding:8px 10px;border:1px solid rgba(229,115,115,.45);border-radius:10px;font-size:.68rem;color:#ffb3b3;background:rgba(229,115,115,.07)">⚠️ 在线下载全部失败(国内网络限制)。推荐下面两种方式:<br>① 📤 上传:电脑下载 .gz 文件后直接上传(最可靠)<br>② 🔗 自定义国内源:填一个你自己能访问到的下载直链(自有服务器/OSS)</div>' : '')
   + '<button class="btn hs-pri" id="hs_ig_online" style="padding:10px">⚡ 在线下载(自动选源:自定义源→直连→代理→镜像)</button>'
@@ -4102,7 +5357,7 @@ async function onlineInstall(btn) {
     + '<span id="hs_ps1" class="on">① 连接源</span><span id="hs_ps2">② 下载</span><span id="hs_ps3">③ 安装</span><span id="hs_ps4">④ 完成</span>'
     + '</div>'
     + '<div class="hs-prog-bar"><div class="hs-prog-fill" id="hs_prog_fill"></div></div>'
-    + '<div id="hs_prog_text" style="font-size:.72rem;color:#9aa3b2;text-align:center;min-height:1.4em">准备中…</div>'
+    + '<div id="hs_prog_text" style="font-size:.72rem;color:#b3bdcb;text-align:center;min-height:1.4em">准备中…</div>'
     + '<div style="text-align:center;margin-top:10px"><button class="btn hs-sm" id="hs_prog_cancel">取消</button></div>'
     + '</div>';
   hsOpenSimple('安装内核', progHtml);
@@ -4150,7 +5405,7 @@ async function onlineInstall(btn) {
       setStep(1);
       console.log('[小海关] 下载源(' + t.name + '):', t.url, t.px || '');
       setTxt('连接源 ' + (mo + 1) + '/' + srcSeq.length + ': ' + esc(t.name) + (info.tag ? ' · v' + esc(info.tag.slice(1)) : ''));
-      await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.dl.exit') + '; nohup sh -c \'curl -sL --connect-timeout 8 ' + (t.px ? '-x ' + shq(t.px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(t.url) + ' 2>/dev/null; echo $? > ' + shq(DIR + '/.dl.exit') + '\' >/dev/null 2>&1 &', 5000);
+      await run('rm -f ' + shq(tmpF) + ' ' + shq(DIR + '/.dl.exit') + ' ' + shq(DIR + '/.dl.pid') + '; nohup sh -c \'curl -sLf --connect-timeout 8 ' + (t.px ? '-x ' + shq(t.px) + ' ' : '') + '-o ' + shq(tmpF) + ' ' + shq(t.url) + ' 2>/dev/null & echo $! > ' + shq(DIR + '/.dl.pid') + '; wait $!; echo $? > ' + shq(DIR + '/.dl.exit') + '\' >/dev/null 2>&1 &', 5000); /* F10: 加 -f——HTTP 4xx/5xx 时 curl exit 22(非0)且不落盘错误页,按 exit 切源;否则 404 大页会 exit 0 被当成功; F11: 记录自有 curl PID($!+wait),清理只杀自有 */
       setStep(2);
       let lastSz = -1, stagnant = 0;
       for (let pi = 0; pi < 120 && !cancelled; pi++) { /* pi=轮询序号; 勿命名 t——会遮蔽外层源对象 t,致进度文案 [undefined](2026-09-02 实测) */
@@ -4158,14 +5413,19 @@ async function onlineInstall(btn) {
         const ex = await run('cat ' + shq(DIR + '/.dl.exit') + ' 2>/dev/null', 3000);
         const exitCode = (ex.content || '').trim();
       if (exitCode !== '') {
-          console.log('[小海关] 源', t.name, 'exit:', exitCode, 'size:', lastSz, 'ok:', exitCode === '0');
-          if (exitCode === '0' && lastSz > 1024) { ok = true }
+          /* F10: 完成判定=退出码 + 最终尺寸复测(同 preflightDl 先例)——不再依赖轮询期 lastSz 快照,
+             修复快速完成(首轮 1.5s 内 exit 0 但 lastSz 仍 -1)被误判失败并耗尽全部源的缺陷 */
+          const finR = await run('wc -c < ' + shq(tmpF) + ' 2>/dev/null', 3000);
+          const finSz = pInt(finR);
+          console.log('[小海关] 源', t.name, 'exit:', exitCode, 'finSz:', finSz, 'ok:', exitCode === '0' && finSz > 1024);
+          if (exitCode === '0' && finSz > 1024) { ok = true; if (totalSz > 0) setFill(100) }
           else if (exitCode !== '0') { setTxt(esc(t.name) + ' 失败(exit ' + exitCode + '),换下一个源…') }
+          else { setTxt(esc(t.name) + ' 下载不完整(' + finSz + 'B),换下一个源…') }
           break;
         }
         const szR = await run('wc -c < ' + shq(tmpF) + ' 2>/dev/null', 3000);
         const sz = pInt(szR);
-        if (sz === lastSz) { stagnant++; if (stagnant >= 10) { await run('for P in $(pidof curl); do kill $P; done 2>/dev/null', 3000); setTxt('下载停滞,切换下一个源…'); break } }
+        if (sz === lastSz) { stagnant++; if (stagnant >= 10) { await run(killOwnDl(DIR + '/.dl.pid', DIR + '/.dl.exit'), 8000); setTxt('下载停滞,切换下一个源…'); break } }
         else { stagnant = 0; lastSz = sz }
         if (totalSz > 0) {
           const pct = Math.round(sz / totalSz * 100);
@@ -4179,8 +5439,8 @@ async function onlineInstall(btn) {
       if (cancelled) break;
       setFill(0);
     }
+    await run(killOwnDl(DIR + '/.dl.pid', DIR + '/.dl.exit'), 8000); /* F11: 先杀自有(exit 已写则跳过,防 PID 复用误杀),再清 exit 哨兵 */
     await run('rm -f ' + shq(DIR + '/.dl.exit'), 3000);
-    await run('for P in $(pidof curl); do kill $P; done 2>/dev/null', 3000);
     if (cancelled) {
       await run('rm -f ' + shq(tmpF), 3000);
       mHide('hs_modal_simple'); toast('已取消安装', 'green'); return;
@@ -4268,10 +5528,16 @@ async function applyWithTxn(what) {
 /* ================= 配置导出/导入 ================= */
 async function exportConf() {
   const txt = await readFile(CJ);
-  const data = txt || JSON.stringify(C, null, 2);
-  const payload = JSON.stringify({ _app: 'xiaohaiguan', _ver: '0.1', exported: nowStr(), conf: JSON.parse(data) }, null, 2);
+  let data = txt;
+  /* 审查P2-7: 盘上 conf.json 损坏时回退内存配置(此前裸 parse 失败→导出无响应) */
+  try { JSON.parse(txt || 'null') } catch (e) { data = JSON.stringify(C, null, 2); console.error('[小海关] conf.json 解析失败,导出回退内存配置:', e.message) }
+  /* 审查P2-4: 导出脱敏引擎密钥——secret 置空,导入后 sanitizeConf/genSecret 自动重新生成 */
+  const conf = JSON.parse(data);
+  if (conf && typeof conf === 'object' && 'secret' in conf) conf.secret = '';
+  const payload = JSON.stringify({ _app: 'xiaohaiguan', _ver: '0.1', exported: nowStr(), conf }, null, 2);
   dl('customs-配置导出-' + stampStr() + '.json', payload);
-  await opLog('配置已导出');
+  toast('已导出(已脱敏引擎密钥,导入后将自动重新生成)', 'green');
+  await opLog('配置已导出(secret 已脱敏)');
 }
 function importConf() {
   const inp = document.createElement('input');
@@ -4304,7 +5570,7 @@ function importConf() {
       if (Array.isArray(nc.force)) nc.force = nc.force.filter(x => x && typeof x.v === 'string' && (x.m !== 'cidr' || okCidr(x.v)));
       const okc = await confirmBox({
         title: '导入配置',
-        html: '<div class="hs-hint">来源:导出于 ' + esc(j.exported || '?') + '<br>包含:开关/白名单(' + ((nc.devices || []).length) + '台)/订阅(' + ((nc.subs || []).length) + '条)/端口/分流清单等<br><br><b>将完全覆盖当前配置</b>(引擎运行中会询问重启)</div>',
+        html: '<div class="hs-hint">来源:导出于 ' + esc(j.exported || '?') + '<br>包含:开关/白名单(' + ((nc.devices || []).length) + '台)/订阅(' + ((nc.subs || []).length) + '条)/端口/分流清单等<br><b>将完全覆盖当前配置</b>(引擎运行中会询问重启)</div>',
         okText: '导入'
       });
       if (!okc) return;
@@ -4375,18 +5641,22 @@ function renderMgrFoot() {
 }
 async function doUninstall() {
   if (HS_UPGRADING) { toast('⬆️ 升级进行中,请等待完成后再卸载', 'pink'); return }
+  /* v2.9.0 场景3: 备份引导前置为独立一步(用户可选备份/不备份,再进卸载确认) */
+  const bak = await confirmBox({
+    title: '📦 卸载前备份', okText: '📦 导出备份并继续', cancelText: '不备份,直接卸载',
+    html: '<div class="hs-hint">建议先导出配置备份(订阅/白名单/线路/分流清单/端口)——重装时导入即可恢复全部设置。<br>点右上 ✕ 取消卸载。</div>'
+  });
+  if (bak === null) return;
+  if (bak) await exportConf();
   const ok = await confirmBox({
     title: '卸载 小海关', danger: true, okText: '卸载', countdown: 0,
     html: '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem;align-items:flex-start"><input type="checkbox" checked id="hs_un_core"><span><b>停止进程,删除内核与规则/自启</b><div class="hs-hint">mihomo 二进制 + HS_* 链 + boot.sh 自启行</div></span></div>'
     + '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem;align-items:flex-start"><input type="checkbox" id="hs_un_all" checked><span><b>删除全部数据目录</b><div class="hs-hint">内核/配置/订阅/日志,零残留</div></span></div>'
-    + '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem;align-items:flex-start"><input type="checkbox" id="hs_un_exp"><span>卸载前导出配置备份<div class="hs-hint">下载 json,重装时导入恢复</div></span></div>'
     + '<div class="hs-hint" style="margin-top:8px">卸载后执行残留检测,确保网络完全还原</div>'
   });
   if (!ok) return;
   const delAll = $('#hs_un_all') && $('#hs_un_all').checked;
-  const doExp = $('#hs_un_exp') && $('#hs_un_exp').checked;
   toast('卸载执行中…', 'green');
-  if (doExp) await exportConf();
   await engineStop();
   await fwClean();
   await bootDisable();
@@ -4414,7 +5684,7 @@ async function doUninstall() {
   renderCard(); renderMgrFoot(); renderPane();
 }
 /* ================= 一键诊断(真实基础版) ================= */
-const DG_STEPS = ['采集进程与端口', '连通性测试', 'EasyTier 兼容', '防火墙与残留', '资源占用', '线路与订阅', '汇总'];
+const DG_STEPS = ['采集进程与端口', '连通性测试', 'ET组网 兼容', '防火墙与残留', '资源占用', '线路与订阅', '汇总'];
 let HS_DIAG = { state: 'idle', items: [], t: '' };
 function openDiag() { if (HS_UPGRADING) { toast('⬆️ 升级进行中,请等待完成后再诊断', 'pink'); return } HS_DIAG = { state: 'idle', items: [], t: '' }; mShow('hs_modal_diag'); renderDiag() }
 async function runDiag() {
@@ -4448,7 +5718,8 @@ async function buildDiagItems() {
     const udpOk = await probeNodeUdp();
     if (udpOk === true) ok('节点 UDP', '出口节点 UDP 可用(有经节点回流的 UDP 流量实证)', '游戏/QUIC 可正常走代理');
     else if (udpOk === false) warn('节点 UDP', '节点 UDP 未能确认可用', '可能是机场封 UDP:53(常见)或节点不支持 UDP;游戏联机/语音若异常,请更换支持 UDP 转发的节点', { kind: 'manual', act: '手动:游戏异常时更换支持 UDP 转发的节点' });
-    const ex = await run('curl -s -m 6 -x http://127.0.0.1:' + C.ports.mixed + ' -o /dev/null -w "%{http_code} %{time_total}" http://www.gstatic.com/generate_204', 10000);
+    else ok('节点 UDP', '暂无流量证据(未判定)', '正常现象——近期无游戏/QUIC 流量即无证据;想确认单个节点:节点页「🛰️ 测UDP」做真实实测');
+    const ex = await run('curl -s -m 6 -x http://127.0.0.1:' + C.ports.mixed + ' -o /dev/null -w "%{http_code} %{time_total}" https://www.gstatic.com/generate_204', 10000);
     const em = (ex.content || '').trim().split(/\s+/);
     if (em[0] === '204') ok('代理出口', '经代理访问外网成功', '耗时 ' + em[1] + 's');
     else warn('代理出口', '经代理访问外网失败', '可能无订阅/节点不可用(返回 ' + (em[0] || '?') + ');请检查订阅是否已添加');
@@ -4481,10 +5752,10 @@ async function buildDiagItems() {
   }
   const et = await etCheck();
   if (et !== 'noinstall') {
-    if (C.coexistAuto && et === 'ok') ok('EasyTier 兼容', '自动兼容已开启,状态文件可读', '将自动排除 ET 网段与打洞端口(规则已生效)');
-    else if (et === 'badstate') warn('EasyTier 兼容', '状态文件存在但内容异常', '按预期版本读不到有效路由;请在 ET 插件重新开关一次状态文件输出', null);
-    else if (et === 'nostate') warn('EasyTier 兼容', 'ET 在位但其「状态文件输出」未开启', '开启自动兼容前需先在 ET 打开输出开关;或忽略', null);
-    else if (!C.coexistAuto) warn('EasyTier 兼容', '检测到 EasyTier,自动兼容未开启(默认关闭)', '仅两插件同跑时需要;不开启则组网流量可能被劫持', { id: 'rt-coex', kind: 'confirm', act: '校验 ET 后开启自动兼容' });
+    if (C.coexistAuto && et === 'ok') ok('ET组网 兼容', '自动兼容已开启,状态文件可读', '将自动排除 ET 网段与打洞端口(规则已生效)');
+    else if (et === 'badstate') warn('ET组网 兼容', '状态文件存在但内容异常', '按预期版本读不到有效路由;请在 ET 插件重新开关一次状态文件输出', null);
+    else if (et === 'nostate') warn('ET组网 兼容', 'ET 在位但其「状态文件输出」未开启', '开启自动兼容前需先在 ET 打开输出开关;或忽略', null);
+    else if (!C.coexistAuto) warn('ET组网 兼容', '检测到 EasyTier,自动兼容未开启(默认关闭)', '仅两插件同跑时需要;不开启则组网流量可能被劫持', { id: 'rt-coex', kind: 'confirm', act: '校验 ET 后开启自动兼容' });
   }
   /* 面板优先原则(2026-09-02 用户定调): UFI 面板是所有插件能力的单点,资源紧张时先保面板 */
   const fr = await run("free 2>/dev/null | awk '/Mem:/{print \$NF}'", 5000);
@@ -4522,7 +5793,8 @@ async function buildDiagItems() {
     /* 启动预检: 用当前插件配置现场生成 yaml 走 mihomo -t——回答"现在点启动能不能成" */
     if (ST.bin) {
       const tmp = DIR + '/.cfgtest.yaml';
-      const w = await writeFile(tmp, genConfigYaml());
+      const gy = genConfigYaml();
+      const w = gy === null ? false : await writeFile(tmp, gy); /* F05: 解析失败返回 null→预检不写盘 */
       if (w) {
         const t = await run(shq(BIN) + ' -t -d ' + shq(DIR) + ' -f ' + shq(tmp) + ' 2>&1 | tail -3; rm -f ' + shq(tmp), 15000);
         const out = (t.content || '').trim();
@@ -4538,15 +5810,15 @@ async function buildDiagItems() {
     warn('降级运行', '已回滚到 ' + esc(C.upgBackup.from || '?') + ' 组件', '插件新版本(' + (C.upgBackup.rolledFrom || '?') + ' 之后)发布前不再提示升级;如需恢复最新组件,升级到更新的插件版本即可', { kind: 'manual', act: '手动:升级到更新版本的插件(高于 ' + esc(C.upgBackup.rolledFrom || '?') + ')后正常升级' });
   }
   /* 完整接管检查 */
+  /* v2.8.11: 待升级检查提升到 dim/run 门槛之外——盘上三件套 vs 插件版本是静态比对,
+     与引擎是否运行/诊断深度无关(用户实锤: 引擎停止/快速诊断时诊断不出待升级) */
+  if (ST.upgradePending === undefined) await upgradeAudit(); /* 诊断独立可跑,不依赖 init 曾执行 */
+  if (ST.upgradePending && ST.upgradePending.length) {
+    warn('待升级', '小海关已更新到新版(v' + V + '),待完成升级', '点击插件卡片的「⬆️ 待升级」或到配置页打开升级卡,一键完成', { id: 'rt-upg', kind: 'confirm', act: '打开升级卡' });
+  } else if (ST.running && dim === 'run') {
+    ok('接管架构', 'TPROXY v3 组件齐备(fw/start/yaml 指纹核对通过)', '');
+  }
   if (ST.running && dim === 'run') {
-    /* 接管架构指纹(升级对账同源): 低版本升上来的旧组件在此暴露——旧 yaml(TUN 无 tproxy-port)/
-       旧 fw.sh(v1.2.0 前)/旧 start.sh(v1.4.5 前自启不挂规则);修复=重启引擎全量重生成三件套 */
-    if (ST.upgradePending === undefined) await upgradeAudit(); /* 诊断独立可跑,不依赖 init 曾执行 */
-    if (ST.upgradePending && ST.upgradePending.length) {
-      warn('接管架构', '旧版接管组件在用: ' + ST.upgradePending.join('/'), '插件已更新但接管组件(fw/start/yaml)仍是旧版,新版能力不生效;重启引擎即完成升级', { id: 'rt-reboot', kind: 'confirm', act: '重启引擎(全量重生成三件套)' });
-    } else {
-      ok('接管架构', 'TPROXY v3 组件齐备(fw/start/yaml 指纹核对通过)', '');
-    }
     const fr = await run('sh ' + shq(FW) + ' status 2>&1', 8000);
     const fwOut = (fr.content || '').trim();
     if (C.s1 !== 'off' || C.s2) {
@@ -4565,7 +5837,7 @@ async function buildDiagItems() {
         Object.keys(ST.arp4 || {}).forEach(ip => { onlineMacs[String(ST.arp4[ip]).toLowerCase()] = 1 });
         Object.keys(ST.neigh6 || {}).forEach(v6 => { onlineMacs[String(ST.neigh6[v6]).toLowerCase()] = 1 });
         const proxied = C.devices.filter(d => d.proxy && d.mac);
-        const privacyMacs = proxied.filter(d => /^[26ae]/i.test(String(d.mac).trim().charAt(1)));
+        const privacyMacs = proxied.filter(d => isPrivacyMac(d.mac));
         const ghostMacs = proxied.filter(d => !onlineMacs[String(d.mac).trim().toLowerCase()]);
         const onlineTotal = Object.keys(onlineMacs).length;
         if (privacyMacs.length) warn('白名单MAC健康', privacyMacs.length + ' 台白名单设备使用隐私/随机 MAC(' + privacyMacs.map(d => esc(d.name)).join('、') + ')', '本地管理地址(第2位为2/6/A/E)会随设备轮换,轮换后白名单自动失效且无提示——手机建议到 Wi-Fi 设置关闭私有Wi-Fi地址,用真实硬件 MAC 重新勾选', { kind: 'manual', act: '手动:设备关闭私有Wi-Fi地址后,到 设备页 用真实MAC重新勾选' });
@@ -4610,6 +5882,61 @@ async function buildDiagItems() {
     else if ((v6n[1] || 0) > 0 && (v6n[0] || 0) > 0) ok('IP泄露风险', 'IPv6 已接管(HS_V6_LAN REDIRECT 规则就绪)', '');
     const cs = await getConnectionStats();
     if (cs) ok('连接', '活跃 ' + cs.total + ' 条', Object.keys(cs.bySrc).map(k => k + ':' + cs.bySrc[k]).join(' ').slice(0, 80));
+    /* ===== v2.9.0 场景2增强: 功能全景缺口检查 ===== */
+    /* 过滤规则生效验证: 配了过滤→盘上 config.yaml 应含 exclude-filter */
+    const hasFilterCfg = (C.subs || []).some(s => s && s.filter && (s.filter.kws || []).length);
+    if (hasFilterCfg) {
+      const cfgTxt = await readFile(CFG);
+      if (cfgTxt && cfgTxt.indexOf('exclude-filter') < 0) warn('订阅过滤', '已配置过滤规则但引擎配置中未生效', '过滤未写入 config.yaml;重写配置并热重载', { id: 'rt-line', kind: 'confirm', act: '重写配置并热重载' });
+      else if (cfgTxt) ok('订阅过滤', '过滤规则已写入引擎配置', '');
+    }
+    /* 融合矛盾(运行态): 融合开但非合并模式 */
+    if (C.subFusion && C.policySrc !== 'merge') warn('配置矛盾', '融合开关已开但策略来源=' + ({ self: '自建', direct: '直通' })[C.policySrc] + ',融合未生效', '融合仅在合并模式下生效;切换策略来源或关融合开关', { kind: 'manual', act: '手动:设置→策略来源 切换到合并' });
+    /* 线路锁定节点失配: 线路点名的节点在当前节点池中已不存在 */
+    if ((C.lines || []).length && cs) {
+      const deadLines = [];
+      (C.lines || []).forEach(L => {
+        if (L && L.mode === 'node' && Array.isArray(L.nodes) && L.nodes.length) {
+          const alive = L.nodes.filter(n => cs.bySrc && Object.keys(ST.arp4 || {}).length >= 0); /* 占位——用组节点验证成本高,降级为计数提示 */
+          if (!L.nodes.length) deadLines.push(L.name);
+        }
+      });
+      /* 简化: 检查线路组在引擎中存在(名字带线路前缀)——引擎组列表校验 */
+      const lg = await apiGet('/proxies');
+      if (lg && lg.proxies) {
+        const grpNames = Object.keys(lg.proxies);
+        const missLn = (C.lines || []).filter(L => L && L.name && !grpNames.some(g => g.indexOf(L.name) >= 0) && grpNames.indexOf('🛤 ' + L.name) < 0);
+        if (missLn.length) warn('分设备线路', missLn.length + ' 条线路组未在引擎中(' + missLn.map(L => esc(L.name)).join('、') + ')', '订阅更新后节点失配或配置未同步;重写配置并热重载', { id: 'rt-line', kind: 'confirm', act: '重写配置并热重载' });
+      }
+    }
+    /* 国内直通表时效: chnroute 文件超过 90 天未更新 */
+    if (C.cnBypass !== false && ST.chn > 0) {
+      const chnAge = await run('echo $(( ($(date +%s) - $(stat -c%Y ' + shq(DIR + '/chnroute.txt') + ' 2>/dev/null || echo 0)) / 86400 ))', 5000);
+      const ageD = parseInt((chnAge.content || '0').trim(), 10) || 0;
+      if (ageD > 90) warn('国内直通表', '路由表已 ' + ageD + ' 天未更新', '新网段可能未收录(新国内站误走代理);到 设置→分流 重新下载', { kind: 'manual', act: '手动:设置→分流 更新路由表' });
+      else ok('国内直通表', '路由表 ' + ageD + ' 天前更新(' + ST.chn + ' 条)', '');
+    }
+    /* ET五维在位: ET活跃时验证排除规则已挂载
+       v2.2.2 判据修正: 旧判据 grep 字面量 "ETNETS|etzll|$ETIPS" 恒 0(iptables -S 回显的是 shell 变量展开后的
+       真实网段/端口,变量名不可能出现在规则里)→ET 活跃时必误报"排除规则未挂载"(真机 WebSSH 实证:实际 HS_LAN
+       7 条/HS_UDP 3 条 ET 排除在位)。改判 ET_CACHE 真实网段与打洞端口是否出现在规则文本中 */
+    if (C.coexistAuto && ET_CACHE && ET_CACHE.active) {
+      const rr = await run('iptables -t nat -S HS_LAN 2>/dev/null; iptables -t mangle -S HS_UDP 2>/dev/null', 8000);
+      const rl = rr.content || '';
+      const cN = (ET_CACHE.cidrs || []).filter(c => rl.indexOf('-d ' + c + ' ') >= 0).length;
+      const pN = (ET_CACHE.p2p_ports || []).filter(p => rl.indexOf(' ' + p + ' ') >= 0).length;
+      if (!cN && !pN) warn('ET组网共存', 'ET 运行中但排除规则未挂载', 'ET 流量可能被代理干扰;重新应用防火墙', { id: 'rt-fw', kind: 'confirm', act: '重新应用防火墙规则' });
+      else ok('ET组网共存', '排除规则在位(' + cN + ' 网段/' + pN + ' 打洞端口)', '');
+    }
+    /* IPv6 响应开启(运行态提示) */
+    if (C.v6Dns) warn('IPv6 响应', '实验开关已开启(运行中)', 'v6 流量正进入引擎处理;如 CPU 占用高或变慢,到 设置→分流 关闭', { kind: 'manual', act: '手动:设置→分流→IPv6 响应 关闭' });
+    /* 订阅时效: 超过 7 天未更新 */
+    const staleSubs = (C.subs || []).filter(s => {
+      if (!s || !s.time) return false;
+      const t = new Date(String(s.time).replace(' ', 'T'));
+      return !isNaN(t) && (Date.now() - t.getTime()) > 7 * 86400000;
+    });
+    if (staleSubs.length) warn('订阅时效', staleSubs.length + ' 个订阅超 7 天未更新(' + staleSubs.map(s => esc(s.name)).join('、') + ')', '节点信息可能过时;到 订阅页 点⟳更新', { kind: 'manual', act: '手动:订阅页 更新' });
   /* === 日志健康(运行态) === */
   if (C.logEnabled) {
     if ((C.logLevel || 'info') === 'debug') warn('日志', '日志级别为 debug,输出量极大', '弱 CPU 设备上 debug 级持续消耗 CPU 与存储(曾单日写至 6MB),排查完请改回 info 或关闭', { kind: 'manual', act: '手动:设置→日志级别 改回 info(或关闭日志)' });
@@ -4700,7 +6027,46 @@ async function buildDiagItems() {
       }
     }
   } else {
+    /* ===== 场景1: 引擎未运行·静态体检(v2.9.0 重构——此前仅一条"停止正常",用户定调补齐) ===== */
     ok('透明接管', '引擎停止,无接管(正常)', '');
+    /* 内核文件: 在位性与大小合理性 */
+    if (ST.bin) {
+      const kb = await run('du -sk ' + shq(DIR + '/mihomo') + ' 2>/dev/null | awk \'{print $1}\'', 5000);
+      const sz = parseInt((kb.content || '0').trim(), 10) || 0;
+      if (sz > 15000) ok('内核文件', 'mihomo 在位(' + (sz / 1024).toFixed(1) + 'MB)', '可正常启动');
+      else warn('内核文件', '内核文件异常(仅 ' + (sz / 1024).toFixed(1) + 'MB,应 ≥15MB)', '文件损坏/下载中断;请到 设置→安装 重新下载或上传', { kind: 'manual', act: '手动:设置→安装 重新安装内核' });
+    } else {
+      warn('内核文件', '未安装 mihomo 内核', '无法启动引擎;到 设置→安装 完成安装(在线下载或上传)', { kind: 'manual', act: '手动:设置→安装 内核' });
+    }
+    /* 防火墙残留: 引擎停了但规则还在=黑洞风险 */
+    if (ST.residue) {
+      warn('防火墙残留', '引擎已停止但有接管规则残留', '残留规则会把流量指向已停止的引擎→黑洞;立即清理', { id: 'rt-fwclean', kind: 'confirm', act: '清除残留规则' });
+    } else ok('防火墙残留', '无残留规则(正常)', '');
+    /* 端口占用预检: 计划端口被其他进程占用会在启动时失败 */
+    const po = await run("netstat -tlnp 2>/dev/null | awk '$4 ~ /:' + C.ports.mixed + '$|:' + C.ports.ctrl + '$|:' + C.ports.dns + '$/ && !/mihomo/ {print $4}' | head -4", 5000);
+    const poLines = (po.content || '').trim();
+    if (poLines) warn('端口预检', '计划端口被其他进程占用: ' + poLines.replace(/\n/g, ' '), '启动可能失败;确认占用进程或到 设置→端口 改端口', { kind: 'manual', act: '手动:排查占用进程或改端口' });
+    else ok('端口预检', '计划端口无占用(' + C.ports.mixed + '/' + C.ports.ctrl + '/' + C.ports.dns + ')', '');
+    /* 订阅缓存有效性: 配置了订阅但缓存文件缺失/为空 */
+    const subCfg = C.subs.filter(s => s && s.url);
+    if (subCfg.length) {
+      const missing = [];
+      for (let si = 0; si < subCfg.length; si++) {
+        const fc = await run('wc -c < ' + shq(DIR + '/providers/sub' + C.subs.indexOf(subCfg[si]) + '.yaml') + ' 2>/dev/null || echo 0', 4000);
+        if ((parseInt((fc.content || '0').trim(), 10) || 0) < 100) missing.push(subCfg[si].name);
+      }
+      if (missing.length) warn('订阅缓存', + missing.length + ' 个订阅缓存缺失/为空(' + missing.map(esc).join('、') + ')', '启动时引擎会自动重新拉取;拉取失败则无可用节点', { kind: 'manual', act: '手动:到 订阅页 点⟳更新重建缓存' });
+      else ok('订阅缓存', + subCfg.length + ' 个订阅缓存就绪', '');
+    }
+    /* 配置矛盾: 融合开关开但策略来源非合并 */
+    if (C.subFusion && C.policySrc !== 'merge') warn('配置矛盾', '融合开关已开但策略来源=' + ({ self: '自建', direct: '直通' })[C.policySrc], '融合仅在「合并」模式下生效;到 设置→策略来源 切换或关闭融合开关', { kind: 'manual', act: '手动:设置→策略来源 切换到合并' });
+    /* 白名单空勾检: white 模式但无勾选设备 */
+    if (C.s1 === 'white' && !C.devices.filter(d => d.proxy).length) warn('白名单空转', '终端代理=白名单模式但未勾选任何设备', '无设备会被接管;到 分流页→接入设备 勾选', { kind: 'manual', act: '手动:分流页 勾选设备' });
+    /* IPv6 响应开启提示(实验) */
+    if (C.v6Dns) warn('IPv6 响应', '实验开关已开启', 'v6 流量进入引擎处理,CPU 占用上升;如无 IPv6 需求建议关闭', { kind: 'manual', act: '手动:设置→分流→IPv6 响应 关闭' });
+    /* 设备忽略名单规模 */
+    const rmN = (Array.isArray(C.removedMacs) ? C.removedMacs : []).length;
+    if (rmN >= 10) warn('设备忽略名单', rmN + ' 台设备在忽略名单', '数量较多;若有谈忘设备到 分流页→已忽略 恢复', { kind: 'manual', act: '手动:分流页 底部已忽略管理' });
   }
   /* === 开机自启(两态) === */
   if (ST.boot) ok('开机自启', '已启用 · ' + (C.bootMode === 'keep' ? '恢复上次(重启后原样恢复开关状态)' : '只起引擎(重启后需到面板手动开闸)'), '');
@@ -4725,13 +6091,13 @@ function renderDiag() {
     const off = (CIRC * (1 - i / N)).toFixed(1);
     const rows = DG_STEPS.map((s, j) => {
       const icon = j < i ? '<span style="color:#66bb6a">✅</span>' : j === i ? '<span style="color:#7fc9f2">🔄</span>' : '<span style="opacity:.35">◌</span>';
-      const st = j < i ? 'color:#c8d2e0' : j === i ? 'color:#7fc9f2;font-weight:700' : 'color:#9aa3b2;opacity:.55';
+      const st = j < i ? 'color:#c8d2e0' : j === i ? 'color:#7fc9f2;font-weight:700' : 'color:#b3bdcb;opacity:.55';
       return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:.74rem;' + st + '">' + icon + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(s) + '</span>' + (j === i ? '<span style="font-size:.64rem;opacity:.75;flex:none">检查中…</span>' : '') + '</div>';
     }).join('');
     if (!box.querySelector('#hs_dg_ring')) {
       box.innerHTML = '<div class="hs-pgscroll" style="display:flex;flex-direction:column;align-items:center;padding:18px 14px">'
-      + '<div style="position:relative;width:312px;height:312px;flex:none;max-width:100%">'
-      + '<svg id="hs_dg_ring" width="312" height="312" viewBox="0 0 312 312" style="position:absolute;left:0;top:0;transform:rotate(-90deg)">'
+      + '<div style="position:relative;width:100%;max-width:280px;aspect-ratio:1;flex:none">' /* 移动端响应式: 宽度自适应+正方形,SVG 同步缩放 */
+      + '<svg id="hs_dg_ring" width="100%" height="auto" viewBox="0 0 312 312" style="display:block;width:100%;height:auto;transform:rotate(-90deg)">'
       + '<circle cx="156" cy="156" r="' + R + '" fill="none" stroke="#151924" stroke-width="27"/>'
       + '<circle id="hs_dg_arc" cx="156" cy="156" r="' + R + '" fill="none" stroke="#7fc9f2" stroke-width="27" stroke-linecap="round"/>'
       + '</svg>'
@@ -4750,17 +6116,20 @@ function renderDiag() {
     return;
   }
   const groups = [...new Set(HS_DIAG.items.map(it => it.g))];
-  const fixable = HS_DIAG.items.filter(it => it.fix && !it.fixed);
+  const fixable = HS_DIAG.items.filter(it => it.fix && !it.fixed && !diagIgnored(it));
   const tag = f => f.kind === 'auto' ? '<span class="hs-tag y">可修复</span>' : f.kind === 'confirm' ? '<span class="hs-tag o">需确认</span>' : f.kind === 'manual' ? '<span class="hs-tag o">需手动</span>' : '<span class="hs-tag y">参数</span>';
-  let h = '<div class="hs-hint" style="margin-bottom:8px">状态:' + (ST.running ? '🟢 运行中' : '⚪ 已停止') + ' · ' + esc(HS_DIAG.t) + ' · 只读</div>';
+  const igN = (C.diagIgnore || []).length;
+  let h = '<div class="hs-hint" style="margin-bottom:8px">状态:' + (ST.running ? '🟢 运行中' : '⚪ 已停止') + ' · ' + esc(HS_DIAG.t) + ' · 只读' + (igN ? ' · 已忽略 ' + igN + ' 项' : '') + '</div>';
   groups.forEach(g => {
     const its = HS_DIAG.items.filter(it => it.g === g);
-    const bad = its.filter(it => it.lv !== 'ok' && !it.fixed).length;
+    const bad = its.filter(it => it.lv !== 'ok' && !it.fixed && !diagIgnored(it)).length;
     h += '<div class="hs-dg"><div class="hs-dgh"><span>' + esc(g) + '</span><span>' + (bad ? '⚠️ ' + bad : '✅') + '</span></div>';
     its.forEach(it => {
-      h += '<div class="hs-dgi"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span>' + (it.fixed ? '✅' : it.lv === 'ok' ? '✅' : '⚠️') + '</span><span>' + esc(it.t) + (it.fixed ? '(已修复)' : '') + '</span>' + (it.fix && !it.fixed ? tag(it.fix) : '') + '</div>'
-      + (it.d ? '<div style="color:#9aa3b2;font-size:.7rem;margin-top:3px;padding-left:21px">' + esc(it.d) + '</div>' : '')
-      + (it.fix && !it.fixed ? '<div style="margin:5px 0 0 21px;background:rgba(79,140,255,.08);border-left:3px solid #7fc9f2;border-radius:0 8px 8px 0;padding:6px 9px;font-size:.72rem;color:#bcd2ff">修复:' + esc(it.fix.act) + '</div>' : '')
+      const ig = diagIgnored(it);
+      const gi = HS_DIAG.items.indexOf(it);
+      h += '<div class="hs-dgi"' + (ig ? ' style="opacity:.55"' : '') + '><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span>' + (it.fixed ? '✅' : it.lv === 'ok' ? '✅' : ig ? '🔕' : '⚠️') + '</span><span>' + esc(it.t) + (it.fixed ? '(已修复)' : '') + '</span>' + (it.fix && !it.fixed ? tag(it.fix) : '') + (ig ? '<span data-ig="' + gi + '" class="hs-hint" style="cursor:pointer;flex:none;text-decoration:underline dotted">已忽略·点此取消</span>' : '') + '</div>'
+      + (it.d ? '<div style="color:#b3bdcb;font-size:.7rem;margin-top:3px;padding-left:21px">' + esc(it.d) + '</div>' : '')
+      + (it.fix && !it.fixed && !ig ? '<div data-dfx="' + gi + '" style="margin:5px 0 0 21px;background:rgba(79,140,255,.08);border-left:3px solid #7fc9f2;border-radius:0 8px 8px 0;padding:6px 9px;font-size:.72rem;color:#bcd2ff;cursor:pointer">💡 ' + esc(it.fix.act) + ' <span class="hs-hint">点击查看说明</span></div>' : '')
       + '</div>';
     });
     h += '</div>';
@@ -4775,15 +6144,25 @@ function renderDiag() {
   $('#hs_dg_re').onclick = runDiag;
   $('#hs_dg_cl').onclick = () => mHide('hs_modal_diag');
   $('#hs_dg_exp').onclick = () => {
-    let t = '小海关 诊断报告\n时间: ' + HS_DIAG.t + '\n状态: ' + (ST.running ? '运行态' : '停止态') + '\n\n';
-    HS_DIAG.items.forEach(i => { t += '[' + (i.lv === 'ok' ? 'OK' : '!!') + '] ' + i.g + ' / ' + i.t + '\n' + (i.d ? '    ' + i.d + '\n' : '') });
+    let t = '小海关 诊断报告\n时间: ' + HS_DIAG.t + '\n状态: ' + (ST.running ? '运行态' : '停止态') + (igN ? '\n已忽略: ' + igN + ' 项(不计入提示)' : '') + '\n\n';
+    HS_DIAG.items.forEach(i => { t += '[' + (i.lv === 'ok' ? 'OK' : diagIgnored(i) ? '忽略' : '!!') + '] ' + i.g + ' / ' + i.t + '\n' + (i.d ? '    ' + i.d + '\n' : '') });
     dl('小海关-诊断报告-' + stampStr() + '.log', t);
   };
   $('#hs_dg_fix').onclick = doRepair;
+  /* v2.2.2: 单项修复说明弹窗(用户定调:不是引导修复,是讲清影响;取舍项可忽略) + 报告内取消忽略 */
+  box.querySelectorAll('[data-dfx]').forEach(el => el.onclick = () => { const it = HS_DIAG.items[+el.dataset.dfx]; if (it) diagItemDlg(it) });
+  box.querySelectorAll('[data-ig]').forEach(el => el.onclick = async () => {
+    const it = HS_DIAG.items[+el.dataset.ig]; if (!it) return;
+    C.diagIgnore = (C.diagIgnore || []).filter(x => x !== diagKey(it)); await saveConf();
+    renderDiag(); toast('已取消忽略:' + esc(it.t), 'green');
+  });
 }
+/* v2.2.2: 诊断忽略键(优先 fix.id,无 id 用 分组|条目名;跨次检测稳定)与忽略判定 */
+const diagKey = it => (it.fix && it.fix.id) ? it.fix.id : (it.g + '|' + it.t);
+const diagIgnored = it => (C.diagIgnore || []).indexOf(diagKey(it)) >= 0;
 async function doRepair() {
-  /* 一键修复只收可自动执行的项(auto/confirm/param);manual=引导用户手动操作,不进队列 */
-  const pend = HS_DIAG.items.filter(it => it.fix && !it.fixed && it.fix.kind !== 'manual');
+  /* 一键修复只收可自动执行的项(auto/confirm/param);manual=引导用户手动操作,不进队列;忽略项不计入 */
+  const pend = HS_DIAG.items.filter(it => it.fix && !it.fixed && !diagIgnored(it) && it.fix.kind !== 'manual');
   if (!pend.length) { toast('无可修复项', 'green'); return }
   let cl = '';
   pend.forEach(it => { cl += '<div style="display:flex;gap:8px;margin:7px 0;font-size:.76rem;align-items:flex-start"><span>' + (it.fix.kind === 'auto' ? '<span class="hs-tag y">自动</span>' : it.fix.kind === 'confirm' ? '<span class="hs-tag o">确认</span>' : '<span class="hs-tag y">参数</span>') + '</span><span>' + esc(it.t) + '<div class="hs-hint">' + esc(it.fix.act) + '</div></span></div>' });
@@ -4792,12 +6171,23 @@ async function doRepair() {
   const paramItem = pend.find(it => it.fix.kind === 'param');
   let pvals = null;
   if (paramItem) { pvals = await paramEditor(paramItem.fix.keys); if (!pvals) return }
-  for (const it of pend) {
-    try {
+  for (const it of pend) await applyFix(it);
+  if (pvals) { Object.assign(C.ports, pvals); await saveConf(); toast('端口参数已保存:' + Object.keys(pvals).map(k => pvals[k]).join('/'), 'green') }
+  toast('修复完成,2 秒后自动复诊…', 'green');
+  await wait(2000);
+  /* 用户已关闭诊断弹窗则不再打扰 */
+  const dm = $('#hs_modal_diag');
+  if (!dm || dm.style.display === 'none') return;
+  await runDiag();
+}
+/* v2.2.2: 单项修复执行体(批量 doRepair 与单项说明弹窗共用);true=已执行 */
+async function applyFix(it) {
+  try {
     if (it.fix.id === 'st-chain') await fwClean();
     else if (it.fix.id === 'st-tun') await run('ip link del ' + shq(C.tunName) + ' 2>/dev/null', 5000);
     else if (it.fix.id === 'st-ports') { /* 参数页处理 */ }
     else if (it.fix.id === 'rt-mem' || it.fix.id === 'rt-port') await engineRestart();
+    else if (it.fix.id === 'rt-upg') { showUpgradeCard(); toast('已打开升级卡,点击「立即升级」完成', 'green') } /* v2.8.11: 待升级修复动作=打开升级卡(非重启引擎) */
     else if (it.fix.id === 'rt-reboot') await engineRestart();
     else if (it.fix.id === 'upg-bak') {
       const okd = await confirmBox({ title: '清理升级备份', danger: true, okText: '清理',
@@ -4816,31 +6206,57 @@ async function doRepair() {
        (含国内 v6 快车道),且 fw_clean 不摘、卸载不清,只能重启设备恢复(2026-09-13 审查 P0)。
        改为与文案一致的"重建防火墙":清规则→按当前配置重应用(未运行则保持清理态) */
     else if (it.fix.id === 'rt-v6') { await fwClean(); await reapplyFw(); }
-    else if (it.fix.id === 'rt-line') { const yaml = genConfigYaml(); await writeFile(CFG, yaml); const okp = await apiPut('/configs?force=true', { path: '', payload: yaml }); if (!okp) toast('线路配置热重载失败,建议重启引擎', 'red'); }
+    else if (it.fix.id === 'rt-line') { const yaml = genConfigYaml(); if (yaml === null) toast('订阅解析失败,跳过重写(旧配置保留)', 'red'); else { await writeFile(CFG, yaml); const okp = await apiPut('/configs?force=true', { path: '', payload: yaml }); if (!okp) toast('线路配置热重载失败,建议重启引擎', 'red'); } }
     /* ⑥ 重写配置并热重载(规则集重新生成/合成;apiPut 404 等以 toast 提示,复诊兜底) */
-    else if (it.fix.id === 'rt-prov') { const yaml = genConfigYaml(); await writeFile(CFG, yaml); const okp = await apiPut('/configs?force=true', { path: '', payload: yaml }); if (!okp) toast('规则集热重载失败，建议重启引擎', 'red'); }
+    else if (it.fix.id === 'rt-prov') { const yaml = genConfigYaml(); if (yaml === null) toast('订阅解析失败,跳过重写(旧配置保留)', 'red'); else { await writeFile(CFG, yaml); const okp = await apiPut('/configs?force=true', { path: '', payload: yaml }); if (!okp) toast('规则集热重载失败，建议重启引擎', 'red'); } }
     else if (it.fix.id === 'st-dns') await reapplyFw();
     else if (it.fix.id === 'log-trunc') { await run(': > ' + shq(LOGF) + ' 2>/dev/null', 5000); ST.rlog = 0 }
     else if (it.fix.id === 'cfg-lineref') { C.devices.forEach(d => { if (d.line && !(C.lines || []).some(L => L && L.id === d.line)) d.line = '' }); await saveConf(); }
     else if (it.fix.id === 'rt-coex') {
       const r = await etCheck();
       if (r === 'ok') { C.coexistAuto = true; await saveConf() }
-      else { toast('校验未通过(' + ({ noinstall: '未装 ET', nostate: 'ET 输出未开', badstate: 'ET 状态文件异常' })[r] + '),该项跳过', 'red'); it.skip = true; continue }
+      else { toast('校验未通过(' + ({ noinstall: '未装 ET', nostate: 'ET 输出未开', badstate: 'ET 状态文件异常' })[r] + '),该项跳过', 'red'); it.skip = true; return false }
     }
     it.fixed = true;
-    } catch (err) {
-      it.fixed = false;
-      toast('「' + it.t + '」修复失败:' + esc(String((err && err.message) || err).slice(0, 50)), 'red');
-      await opLog('修复失败[' + it.fix.id + ']:' + String((err && err.message) || err).slice(0, 80));
-    }
+    return true;
+  } catch (err) {
+    it.fixed = false;
+    toast('「' + it.t + '」修复失败:' + esc(String((err && err.message) || err).slice(0, 50)), 'red');
+    await opLog('修复失败[' + it.fix.id + ']:' + String((err && err.message) || err).slice(0, 80));
+    return false;
   }
-  if (pvals) { Object.assign(C.ports, pvals); await saveConf(); toast('端口参数已保存:' + Object.keys(pvals).map(k => pvals[k]).join('/'), 'green') }
-  toast('修复完成,2 秒后自动复诊…', 'green');
-  await wait(2000);
-  /* 用户已关闭诊断弹窗则不再打扰 */
-  const dm = $('#hs_modal_diag');
-  if (!dm || dm.style.display === 'none') return;
-  await runDiag();
+}
+/* v2.2.2: 单项说明弹窗(用户定调:点击修复项不是引导修复,是讲清影响与取舍——
+   有些项不是必须修的,例如 IPv6 响应开启略增 CPU 负担但用户可能正需要;
+   因此给「忽略此项」出口,忽略后不计警示,报告列表可随时取消) */
+async function diagItemDlg(it) {
+  const kd = { auto: '可自动修复,无副作用', confirm: '可自动执行,但会改变当前网络行为——先看清影响再决定', param: '需填写参数后执行', manual: '无自动修复——这是"要不要"的取舍项,不是故障' };
+  hsOpenSimple(it.t,
+    '<div style="padding:4px 2px">'
+    + '<div class="hs-hint">分组:' + esc(it.g) + ' · 当前:' + (it.lv === 'ok' ? '✅ 正常' : '⚠️ 有提示') + '</div>'
+    + (it.d ? '<div style="margin:8px 0;font-size:.76rem;line-height:1.6">' + esc(it.d) + '</div>' : '')
+    + (it.fix ? '<div style="margin:8px 0;padding:8px 10px;border-left:3px solid #7fc9f2;background:rgba(79,140,255,.08);border-radius:0 8px 8px 0;font-size:.74rem;color:#bcd2ff"><b>' + kd[it.fix.kind] + '</b><br>动作:' + esc(it.fix.act) + '</div>' : '')
+    + '<div class="hs-hint" style="margin-top:6px">有些提示不是必须处理(例如 IPv6 响应开启会略增 CPU 负担,但你可能正需要它)。不需要就选「忽略此项」,后续检测不再计入,报告列表里可随时取消忽略。</div>'
+    + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'
+    + (it.fix && it.fix.kind !== 'manual' && !it.fixed ? '<button class="btn hs-pri" id="hs_df_go" style="flex:1.2">立即修复</button>' : '')
+    + (it.lv !== 'ok' ? '<button class="btn" id="hs_df_ig" style="flex:1">忽略此项</button>' : '')
+    + '<button class="btn" id="hs_df_no" style="flex:1">关闭</button></div></div>');
+  const no = $('#hs_df_no'); if (no) no.onclick = () => mHide('hs_modal_simple');
+  const ig = $('#hs_df_ig');
+  if (ig) ig.onclick = async () => {
+    const k = diagKey(it);
+    if ((C.diagIgnore || []).indexOf(k) < 0) { C.diagIgnore = (C.diagIgnore || []).concat([k]); await saveConf() }
+    mHide('hs_modal_simple'); renderDiag();
+    toast('已忽略「' + it.t + '」:后续检测不再计入,报告列表可取消', 'green');
+  };
+  const go = $('#hs_df_go');
+  if (go) go.onclick = async () => {
+    go.disabled = true; go.textContent = '修复中…';
+    const okf = await applyFix(it);
+    mHide('hs_modal_simple');
+    renderDiag();
+    if (okf) toast('已执行修复,建议复诊确认', 'green');
+  };
 }
 async function paramEditor(keys) {
   const lk = { mixed: '混合', redir: '透明', tproxy: 'UDP', dns: 'DNS', ctrl: '控制' };
@@ -4889,6 +6305,11 @@ async function init() {
   if (host) host.insertAdjacentElement('afterend', card); else document.body.appendChild(card);
   await loadConf();
   await collectStatus();
+  /* v2.9.0 场景4: 首次安装引导——零配置(无内核/无订阅/无运行记录)时弹 5 步向导 */
+  if (!ST.bin && !(C.subs || []).length && !ST.running && !(C.devices || []).length) {
+    console.log('[小海关] 检测到首次安装,打开新手引导');
+    openFirstRunGuide();
+  }
   await checkResidue();
   /* 升级对账: 低版本升级上来,盘上三件套(fw.sh/start.sh/config.yaml)可能还是旧版生成的 */
   await upgradeAudit();
@@ -4900,11 +6321,30 @@ async function init() {
       console.log('[小海关] 二次确认:引擎确实未运行,清理孤儿规则');
       await fwClean();
       await checkResidue();
+      /* 审查 P1-2: 自愈可见化——用户打开面板时应看到已自动清理(此前仅 console,孤儿黑洞期间用户无感知) */
+      toast(!ST.residue ? '检测到孤儿接管规则(引擎已退出),已自动清理——网络恢复直连' : '孤儿规则清理未净,请跑诊断页修复', !ST.residue ? 'green' : 'red');
+      await opLog(!ST.residue ? 'init 自愈: 检测并清理孤儿接管规则(引擎未运行但规则残留)' : 'init 自愈: 孤儿规则清理未净(诊断页可修复)');
     }
   }
   renderCard();
   console.log('[小海关] init 完成');
-  } catch (e) { console.error('[小海关] init 异常:', e) }
+  } catch (e) {
+    console.error('[小海关] init 异常:', e);
+    /* F01-R-007.B: 初始化失败必须在卡片渲染可读错误(可重试),不再只写 console;
+       card 元素在 loadConf 前已创建,此处可安全渲染;esc+截断,不含 secret/命令原文 */
+    try {
+      const box = document.getElementById('hs_card');
+      if (box) {
+        const msg = esc(String((e && e.message) || e || '未知错误').slice(0, 120));
+        box.innerHTML = ''
+          + '<div class="title" style="margin:6px 0"><strong>🛡️ 小海关</strong> <span style="font-size:.62rem;color:#b3bdcb;font-weight:400">v' + V + '</span></div>'
+          + '<div class="hs-warn" style="margin:4px 8px" title="' + msg + '">⚠️ 初始化失败: ' + msg
+          + ' <button class="btn hs-sm" id="hs_init_retry" type="button">刷新重试</button></div>';
+        const rb = document.getElementById('hs_init_retry');
+        if (rb) rb.onclick = () => location.reload();
+      }
+    } catch (e2) { console.error('[小海关] 初始化错误卡片渲染失败:', e2) }
+  }
 }
 init();
 })()

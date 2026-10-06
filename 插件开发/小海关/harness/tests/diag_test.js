@@ -1,17 +1,23 @@
 /* 体检八项(①-⑧ v1.8.6)验收断言:静态源码锚点 + playwright 四场景行为
    静态段在 v1.8.6 落码前会失败——属预期;全套门禁在实施完成后由主流程统一运行 */
 const { chromium } = require('playwright-core');
-const { STUB_URL, EXE, SRC: SRC_PATH } = require('../util');
-const SRC = require('fs').readFileSync(SRC_PATH, 'utf8');
+const { STUB_URL, EXE, SRC: SRC_PATH, SOURCE_TEXT: SRC } = require('../util');
+const BUNDLE = require('fs').readFileSync(SRC_PATH, 'utf8');
 let fails = 0;
 const t = (n, ok) => { console.log((ok ? '✅' : '❌') + ' ' + n); if (!ok) fails++; };
 const cnt = re => (SRC.match(re) || []).length;
 
 /* ========== 1. 静态断言(八项实现锚点) ========== */
-t("版本 V='2.2.1'", /const V\s*=\s*'2\.2\.1'/.test(SRC));
+t("版本 V=三段式", /const V\s*=\s*'\d+\.\d+\.\d+'/.test(SRC));
+/* v2.9.52 诊断修复交互重做+ET共存误报根修 */
+t('v2.9.52 ET在位判据改真实网段/端口(旧字面量 grep 恒0已废)', SRC.includes("(ET_CACHE.cidrs || []).filter(c => rl.indexOf('-d ' + c + ' ') >= 0)") && !SRC.includes('grep -cE "ETNETS'));
+t('v2.9.52 单项说明弹窗(diagItemDlg+取舍引导语)', SRC.includes('async function diagItemDlg') && SRC.includes('不是必须处理') && SRC.includes('取舍项'));
+t('v2.9.52 忽略机制(键稳定+忽略项不计警示)', SRC.includes('const diagKey = it =>') && /bad = its\.filter\(it => it\.lv !== 'ok' && !it\.fixed && !diagIgnored\(it\)\)/.test(SRC));
+t('v2.9.52 报告内取消忽略+可点修复框', SRC.includes('data-ig') && SRC.includes('已忽略·点此取消') && SRC.includes('data-dfx'));
+t('v2.9.52 applyFix 独立(doRepair 与弹窗共用,无 continue 残留)', SRC.includes('async function applyFix(it)') && !/it\.skip = true; continue/.test(SRC));
 /* v2.2.1 活动连接展示重做(87条同目标真机实证) */
 t('v2.2.1 同目标聚合(agg 对象+×N 计数)', SRC.includes('const agg = {};') && SRC.includes('t.n > 1') && SRC.includes("t.n + '条"));
-t('v2.2.1 机场信息节点识别(ℹ️ 替代裸文案)', SRC.includes('ℹ️ 信息节点') && /剩余流量\|到期/.test(SRC));
+t('v2.2.1 机场信息节点识别(v2.9.x 渲染加标签,拆锚点)', SRC.includes('ℹ️') && SRC.includes('信息节点') && /剩余流量\|到期/.test(SRC));
 t('v2.2.1 网关视角说明(隧道外层解释)', SRC.includes('只能看到其隧道目标'));
 t('v2.2.1 设备区手动刷新(⟳ 走 renderPane 同路径)', SRC.includes('id="hs_dev_rf"') && SRC.includes("drf.onclick = async () => { drf.style.opacity"));
 t('v2.2.1 单按钮运行态改圆点(绿●运行/灰●停止,三角▶已废)', SRC.includes("'<span style=\"color:#66bb6a\">\u25cf</span> \u5c0f\u6d77\u5173'") && !/小海关▶/.test(SRC));
@@ -32,7 +38,7 @@ t('v2.1.10 cox 绑定位于 split 分支(在 if(split) 与 if(set) 之间)', (()
   const iCox = L.findIndex(l => l.includes("const cox = p.querySelector('#hs_set_cox')"));
   return iSp >= 0 && iSet > iSp && iCox > iSp && iCox < iSet;
 })());
-t('v2.1.10 cox 自检链完整(etCheck 三分支+通过写草稿)', SRC.includes("await etCheck();") && SRC.includes("setDraft().coexistAuto = true") && SRC.includes('需先在 EasyTier 开启状态输出'));
+t('v2.1.10 cox 自检链完整(etCheck 三分支+通过写草稿,v2.9.x 文案锚点)', SRC.includes("await etCheck();") && SRC.includes("setDraft().coexistAuto = true") && SRC.includes('状态文件输出'));
 /* v2.1.9 使用说明入口重设计(状态页引导条+设置页帮助区,撤标题行图标) */
 t('v2.1.9 GUIDE_URL 常量(引导页地址)', SRC.includes("const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/'"));
 t('v2.1.9 状态页引导条(新手第一屏)', SRC.includes('id="hs_ov_guide"') && SRC.includes('第一次使用小海关'));
@@ -52,7 +58,7 @@ t('v2.1.5 无接管升级补写 fw.sh(只写不执行)', SRC.includes('if (wasUp
 t('v2.1.5 磁盘预检函数', SRC.includes('async function hsDiskKB()') && SRC.includes('async function hsCleanJunk()'));
 t('v2.1.5 启动预检阈值 5MB', SRC.includes('freeKB < 5120'));
 t('v2.1.5 下载预检阈值 45MB', SRC.includes('dKB < 46080'));
-t('v2.1.5 清理清单含 .dl/.dl.gz/mihomo.tmp/.bak', SRC.includes('rm -f *.dl *.dl.gz mihomo.tmp .dl.exit .pf.exit fw.sh.bak start.sh.bak config.yaml.bak conf.json.bak'));
+t('v2.1.5 清理清单(v2.9.x 扩:geo/chn哨兵+pid)', SRC.includes('rm -f *.dl *.dl.gz mihomo.tmp .dl.exit .pf.exit .geo.exit .chn.exit .dl.pid .pf.pid .geo.pid .chn.pid fw.sh.bak start.sh.bak config.yaml.bak conf.json.bak'));
 /* v2.1.4 在线下载进度窗真机修复(全程隐形/只提示安装中无下文) */
 t('v2.1.4 引导→在线下载不再先 mHide 同弹窗(同tick关后开=面板关窗收尾压制)', !/\$\('#hs_ig_online'\)\.onclick = \(\) => \{ mHide\('hs_modal_simple'\); onlineInstall/.test(SRC));
 t('v2.1.4 失败回引导页不再先 mHide', !/await wait\(1500\); mHide\('hs_modal_simple'\);\s*\n\s*openInstallGuide\(true\)/.test(SRC));
@@ -121,7 +127,7 @@ t('两 fix id(rt-cnrec/rt-prov)全有 doRepair 分支', ['rt-cnrec', 'rt-prov'].
     await p.goto(STUB_URL);
     if (setup) await p.evaluate(setup);
     await p.reload();
-    await p.addScriptTag({ content: SRC });
+    await p.addScriptTag({ content: BUNDLE });
     await p.waitForTimeout(3000);
   };
   /* 进诊断: 卡片状态行 → 状态页操作栏「诊断」→ 开始诊断 → 等报告(#hs_dg_fix 出现=done 态,runDiag 约 5s+) */

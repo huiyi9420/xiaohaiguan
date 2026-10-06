@@ -1,0 +1,111 @@
+/* 自动生成 */
+.hs-rv{position:relative}
+.hs-rv,.hs-rv *{box-sizing:border-box}
+.hs-rv svg{width:100%;height:auto;display:block}
+.hs-rv .mainflow{stroke-dasharray:7 11;animation:hsRvDashF .95s linear infinite}
+@keyframes hsRvDashF{0%{stroke-dashoffset:0}42%{stroke-dashoffset:-11}100%{stroke-dashoffset:-18}}
+.hs-rv .branch{stroke-dasharray:4 8;animation:hsRvDashB 1.4s linear infinite;transition:stroke-width .3s}
+@keyframes hsRvDashB{0%{stroke-dashoffset:0}45%{stroke-dashoffset:-7}100%{stroke-dashoffset:-12}}
+.hs-rv .branch.hot{stroke-width:3.2;animation-duration:.55s}
+.hs-rv .jn{cursor:pointer;transition:opacity .35s}
+.hs-rv .jn .hit{fill:transparent}
+.hs-rv .jn:hover .nd{filter:brightness(1.35)}
+.hs-rv .jn.on .nd{stroke-width:3.5}
+.hs-rv .jn.on .tagp{filter:brightness(1.45)}
+.hs-rv .jn.dim{opacity:.38}
+.hs-rv .jn.found .nd{animation:hsRvFoundP 1s ease-in-out 3}
+@keyframes hsRvFoundP{50%{filter:brightness(1.9)}}
+.hs-rvs{display:flex;gap:7px;padding:9px 2px 0}
+.hs-rvs input{flex:1;min-width:0;font-family:inherit;font-size:11.5px;color:#e8eaf0;background:rgba(255,255,255,.05);border:1px solid rgba(127,201,242,.16);border-radius:10px;padding:7px 11px;outline:none;transition:border-color .2s}
+.hs-rvs input:focus{border-color:rgba(127,201,242,.55)}
+.hs-rvs .hs-rvgo{font-family:inherit;font-size:11.5px;padding:0 12px;border-radius:10px;cursor:pointer;border:1px solid rgba(127,201,242,.45);background:rgba(127,201,242,.14);color:#7fc9f2}
+.hs-rvs .hs-rvgo:hover{filter:brightness(1.15)}
+.hs-rvnote{font-size:11px;color:#8ba0bd;padding:5px 2px 0;line-height:1.6}
+.hs-rvnote.ok{color:#e8eaf0}
+.hs-rvh{display:none;padding:4px 2px 2px}
+.hs-rvv{display:none;padding:2px 0 4px}
+.hs-rv[data-mode=h] .hs-rvh{display:block}
+.hs-rv[data-mode=v] .hs-rvv{display:block}
+.hs-rvlk{position:relative;height:28px;display:none}
+.hs-rvlk.on{display:block}
+.hs-rv[data-mode=v] .hs-rvlk{display:none!important}
+.hs-rvlk .lkline{position:absolute;top:-24px;bottom:-1px;width:2px;border-radius:2px;background:repeating-linear-gradient(180deg,currentColor 0 6px,transparent 6px 12px);animation:hsRvDashDN .8s linear infinite}
+@keyframes hsRvDashDN{to{background-position:0 12px}}
+.hs-rvlk .lkdot{position:absolute;width:7px;height:7px;margin-left:-2.5px;border-radius:50%;background:currentColor;box-shadow:0 0 9px currentColor;animation:hsRvDropt 1.15s cubic-bezier(.45,.05,.55,.95) infinite;opacity:0}
+@keyframes hsRvDropt{0%{top:-15px;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:23px;opacity:0}}
+.hs-rvdt{display:none;position:relative;padding:14px;transform-origin:var(--ox,50%) 0;background:rgba(19,28,48,.55);border:1px solid rgba(255,255,255,.07);border-radius:12px;margin-bottom:10px}
+.hs-rvdt.show{display:block;animation:hsRvPour .5s cubic-bezier(.22,.9,.28,1) both /* v2.9.51: 展开回调丝滑档(真机反馈像卡顿),长动画保留给折叠/水流 */}
+@keyframes hsRvPour{from{opacity:0;transform:translateY(-16px) scale(.965)}to{opacity:1;transform:none}}
+.hs-rvdt .hs-rvnotch{position:absolute;top:-2px;width:18px;height:4px;border-radius:2px;display:none}
+.hs-rvdt .hs-rvnotch.on{display:block}
+.hs-rv[data-mode=v] .hs-rvnotch{display:none!important}
+.hs-rvdt .hs-rvx{position:absolute;top:9px;right:10px;z-index:5;background:none;border:0;color:#8ba0bd;font-size:16px;cursor:pointer;padding:6px;font-family:inherit;line-height:1}
+.hs-rvdt .hs-rvx:hover{color:#e8eaf0}
+.hs-rv .d-head{display:flex;gap:9px;align-items:center;padding-right:28px}
+.hs-rv .d-ico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;border:1px solid;flex:0 0 auto}
+.hs-rv .d-t{flex:1;min-width:0}
+.hs-rv .d-t em{font-style:normal;font-size:10px;color:#8ba0bd;display:block}
+.hs-rv .d-t h3{font-size:13px;color:#e8eaf0;margin:0;font-weight:700}
+.hs-rv .fchip{margin-left:auto;font-size:10.5px;padding:2px 9px;border-radius:999px;border:1px solid;white-space:nowrap;flex:none}
+.hs-rv .fchip.direct{color:#8fe39a;border-color:rgba(102,187,106,.45);background:rgba(102,187,106,.1)}
+.hs-rv .fchip.direct2{color:#9ccc65;border-color:rgba(156,204,101,.45);background:rgba(156,204,101,.1)}
+.hs-rv .fchip.proxy{color:#ffcc80;border-color:rgba(255,183,77,.45);background:rgba(255,183,77,.1)}
+.hs-rv .fchip.rule{color:#7fc9f2;border-color:rgba(127,201,242,.45);background:rgba(127,201,242,.1)}
+.hs-rv .d-desc{margin:10px 0;font-size:11.5px;color:#b9c8dd;line-height:1.75}
+.hs-rv .d-rows{display:grid;gap:5px;margin-bottom:10px}
+.hs-rv .d-row{display:flex;justify-content:space-between;gap:12px;font-size:11.5px;padding:6px 10px;background:rgba(255,255,255,.035);border-radius:8px}
+.hs-rv .d-row span{color:#8ba0bd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.hs-rv .d-row b{font-weight:600;text-align:right;color:#e8eaf0}
+.hs-rv .d-acts{display:flex;gap:8px;flex-wrap:wrap}
+.hs-rv .d-acts:empty{display:none}
+.hs-rv .hs-rv-vd{font-size:11px;padding:1px 8px;border-radius:999px;margin:0 1px;font-weight:700;white-space:nowrap}
+.hs-rv .hs-rv-vd.vd-d{color:#8fe39a;background:rgba(102,187,106,.16);border:1px solid rgba(102,187,106,.45)}
+.hs-rv .hs-rv-vd.vd-p{color:#ffcc80;background:rgba(255,183,77,.16);border:1px solid rgba(255,183,77,.45)}
+.hs-rv .hs-rv-vd.vd-r{color:#ff8a80;background:rgba(255,120,100,.16);border:1px solid rgba(255,120,100,.45)}
+.hs-rv .hitbanner{display:flex;gap:8px;align-items:center;font-size:11px;padding:7px 10px;border-radius:10px;border:1px solid;margin-bottom:11px;line-height:1.5;flex-wrap:wrap}
+.hs-rvdt.show .d-head,.hs-rv .vitem.open .d-head{animation:hsRvRowin .34s cubic-bezier(.2,.8,.25,1) both}
+.hs-rvdt.show .d-desc,.hs-rv .vitem.open .d-desc{animation:hsRvRowin .34s cubic-bezier(.2,.8,.25,1) both;animation-delay:.06s}
+.hs-rvdt.show .d-row,.hs-rv .vitem.open .d-row{animation:hsRvRowin .34s cubic-bezier(.2,.8,.25,1) both}
+.hs-rvdt.show .d-rows .d-row:nth-child(1),.hs-rv .vitem.open .d-rows .d-row:nth-child(1){animation-delay:.12s}
+.hs-rvdt.show .d-rows .d-row:nth-child(2),.hs-rv .vitem.open .d-rows .d-row:nth-child(2){animation-delay:.19s}
+.hs-rvdt.show .d-rows .d-row:nth-child(3),.hs-rv .vitem.open .d-rows .d-row:nth-child(3){animation-delay:.19s}
+.hs-rvdt.show .d-rows .d-row:nth-child(4),.hs-rv .vitem.open .d-rows .d-row:nth-child(4){animation-delay:.26s}
+.hs-rvdt.show .d-acts,.hs-rv .vitem.open .d-acts{animation:hsRvRowin .34s cubic-bezier(.2,.8,.25,1) both;animation-delay:.32s}
+@keyframes hsRvRowin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes hsRvLiveIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.hs-rvv .railwrap{position:relative;padding:2px 0}
+.hs-rvv .rail{position:absolute;left:16.5px;top:17px;bottom:17px;width:3px;border-radius:2px;background:repeating-linear-gradient(180deg,rgba(127,201,242,.75) 0 7px,transparent 7px 16px);animation:hsRvRail .95s linear infinite;box-shadow:0 0 5px rgba(127,201,242,.3)}
+.hs-rvv .railfill{position:absolute;left:16px;top:17px;width:4px;height:0;border-radius:2px;background:linear-gradient(180deg,rgba(127,201,242,.95),rgba(127,201,242,.5));box-shadow:0 0 8px rgba(127,201,242,.45);transition:height 1.1s cubic-bezier(.25,.9,.3,1);z-index:0}
+.hs-rvv .raildot{position:absolute;left:14.5px;width:7px;height:7px;border-radius:50%;background:#7fc9f2;box-shadow:0 0 8px rgba(127,201,242,.9);animation:hsRvRailDrop 2.6s linear infinite;opacity:0;z-index:1}
+.hs-rvv .raildot.r2{animation-delay:1.3s}
+@keyframes hsRvRailDrop{0%{top:17px;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:calc(100% - 24px);opacity:0}}
+@keyframes hsRvRail{0%{background-position:0 0}40%{background-position:0 10px}100%{background-position:0 16px}}
+.hs-rvv .vcap{display:flex;align-items:center;gap:8px;min-height:34px}
+.hs-rvv .vdot{flex:0 0 auto;width:11px;height:11px;margin-left:12.5px;border-radius:50%;position:relative;z-index:1}
+.hs-rvv .vdot.src{background:#7fc9f2;box-shadow:0 0 9px rgba(127,201,242,.85);animation:hsRvSrcP 2.4s ease-in-out infinite}
+@keyframes hsRvSrcP{0%,100%{box-shadow:0 0 6px rgba(127,201,242,.55)}50%{box-shadow:0 0 14px rgba(127,201,242,1)}}
+.hs-rvv .vdot.end{background:#141822;border:2px solid #7fc9f2}
+.hs-rvv .vlab{font-size:10px;color:#8ba0bd;line-height:1.5}
+.hs-rvv .vlab b{color:#e8eaf0;font-size:11px;font-weight:600}
+.hs-rvv .vlaneh{display:flex;align-items:center;gap:8px;margin:7px 2px 5px;font-size:9.5px;white-space:nowrap}
+.hs-rvv .vlaneh.g{color:#8fe39a}
+.hs-rvv .vlaneh.b{color:#7fc9f2}
+.hs-rvv .vlaneh:before,.hs-rvv .vlaneh:after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent)}
+.hs-rvv .vitem{position:relative}
+.hs-rvv .vitem.open .vrow{background:rgba(255,255,255,.06);box-shadow:inset 2px 0 0 var(--c,#7fc9f2)}
+.hs-rvv .vrow{position:relative;display:flex;align-items:center;gap:9px;padding:9px 6px 9px 2px;margin:2px 0;background:none;border:0;color:#e8eaf0;font-family:inherit;cursor:pointer;width:100%;border-radius:10px;text-align:left;transition:background .25s,box-shadow .25s}
+.hs-rvv .vrow .dot{flex:0 0 auto;width:22px;height:22px;margin-left:5px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:#1a2130;border:2px solid var(--c,#7fc9f2);color:var(--c,#7fc9f2);position:relative;z-index:1;transition:box-shadow .3s}
+.hs-rvv .vitem.open .vrow .dot{box-shadow:0 0 0 4px rgba(255,255,255,.05),0 0 12px var(--c,#7fc9f2)}
+.hs-rvv .vrow .vmain{flex:1;min-width:0}
+.hs-rvv .vrow .nm{font-size:12.5px;font-weight:600;display:flex;gap:6px;align-items:baseline;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hs-rvv .vrow .ct{font-size:10.5px;color:#8ba0bd;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hs-rvv .vrow .fchip{font-size:9.5px;padding:2px 7px}
+.hs-rvv .chev{flex:0 0 auto;color:#8ba0bd;font-size:12px;transition:transform .3s}
+.hs-rvv .vitem.open .chev{transform:rotate(90deg);color:#e8eaf0}
+.hs-rvv .vpanel{max-height:0;overflow:hidden;transition:max-height 1.35s cubic-bezier(.3,.8,.3,1)}
+.hs-rvv .vpanel-in{padding:6px 6px 12px 36px}
+.hs-rvv .vpanel-in .d-row{flex-wrap:wrap;row-gap:2px}
+.hs-rvv .vpanel-in .d-row span{white-space:normal}
+.hs-rvv .vpanel-in .d-head{padding-right:0}
+.hs-rvv .vpanel-in .d-t h3{font-size:12.5px}
+@media(prefers-reduced-motion:reduce){.hs-rv *,.hs-rv *:before,.hs-rv *:after{animation:none!important;transition:none!important}}

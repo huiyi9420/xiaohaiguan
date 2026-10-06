@@ -1,6 +1,6 @@
 const { chromium } = require('playwright-core');
-const { STUB_URL, EXE, SRC: SRC_PATH } = require('../util');
-const SRC = require('fs').readFileSync(SRC_PATH, 'utf8');
+const { STUB_URL, EXE, SRC: SRC_PATH, SOURCE_TEXT: SRC } = require('../util');
+const BUNDLE = require('fs').readFileSync(SRC_PATH, 'utf8');
 let fails = 0;
 const t = (n, ok) => { console.log((ok ? '✅' : '❌') + ' ' + n); if (!ok) fails++; };
 
@@ -9,15 +9,15 @@ t('rt-v6 修复动作已改为 fwClean+reapplyFw', SRC.includes("it.fix.id === '
 t('无 FORWARD DROP 可执行调用(注释提及不算)', !SRC.includes("run('ip6tables -I FORWARD -j DROP"));
 t('boot 行不再 sleep 2 盲挂', !SRC.includes("' && sleep 2 && sh ' + FW + ' apply"));
 t('boot 行保留单路径自启', SRC.includes("[ -f ' + START + ' ] && sh ' + START + ' # plugins/customs'"));
-t('start.sh 单实例守卫', SRC.includes('already running: $HS_P'));
+t('start.sh 单实例守卫(v2.9.x 文案无空格)', SRC.includes('already running:$HS_P'));
 t('ETNETS6 分桶存在', SRC.includes("ETNETS6="));
 t('sanitizeConf 定义与两处调用', SRC.includes('function sanitizeConf()') && (SRC.match(/sanitizeConf\(\);/g) || []).length >= 2);
 t('readEtState 过滤 cidrs/ports', SRC.includes('ET_CACHE.cidrs6 = rawC.filter') && SRC.includes('n >= 1 && n <= 65535'));
 t('preflightDl 最终尺寸复测', SRC.includes('const finSz = done ? pInt('));
 t('createFixedToast 按文档签名', SRC.includes("createFixedToast('hs_dup_warn'"));
 t('debug 定时器级别校验', SRC.includes("if (C.logLevel !== 'debug') return;"));
-t('合并 rule-providers 按实际缩进归一', SRC.includes('const rpLead =') && SRC.includes('const rpCut = Math.max(0, rpLead - 2)'));
-t('direct china_ip 去重放宽缩进', SRC.includes('!/^[ \\t]+china_ip:/m.test(yml)'));
+t('合并订阅解析归一(v2.9.x 管线:规范缩进2空格+重序列化)', SRC.includes('规范缩进(2 空格)') && SRC.includes('重序列化'));
+t('direct 直通消费重序列化产物(v2.9.x 管线化)', SRC.includes('重序列化'));
 t('探测 in-flight 守卫', SRC.includes('if (HS_UDP_BUSY) return HS_UDP_OK;'));
 t('设备采集 in-flight 守卫', SRC.includes('hsDevBusy = true;'));
 t('总览刷新冷却时间戳', SRC.includes('HS_OV_RF_AT = Date.now()'));
@@ -56,7 +56,7 @@ t("ZWRT: 挂载等 DOM 锚点就绪 waitFor('.functions-container'", SRC.include
     }));
   });
   await p.reload();
-  await p.addScriptTag({ content: SRC });
+  await p.addScriptTag({ content: BUNDLE });
   await p.waitForTimeout(3000);
   await p.evaluate(() => { document.querySelector('#hs_status').click(); });
   await p.waitForTimeout(800);
@@ -82,7 +82,7 @@ t("ZWRT: 挂载等 DOM 锚点就绪 waitFor('.functions-container'", SRC.include
       { mac: 'aa:bb:cc:dd:ee:20', ip: '192.168.0.99', name: '离网旧机', proxy: true, line: '' } ] }));
   });
   await p2.reload();
-  await p2.addScriptTag({ content: SRC });
+  await p2.addScriptTag({ content: BUNDLE });
   await p2.waitForTimeout(2500);
   await p2.evaluate(() => { document.querySelector('#hs_status').click(); });
   await p2.waitForTimeout(600);
