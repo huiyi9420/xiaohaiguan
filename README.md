@@ -4,7 +4,7 @@
 
 > 把随身 WiFi 变成家用路由器级别的代理网关：连上它 WiFi 的手机、电脑、平板**无需安装任何 App**，流量自动按规则分流——该走代理的走代理，该直连的直连。
 
-[![Version](https://img.shields.io/badge/version-2.2.1-blue)](插件开发/小海关/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.9.55-blue)](插件开发/小海关/CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-UFI__TOOLS__ZWRT%201.0.0-orange)]()
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
