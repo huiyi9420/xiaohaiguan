@@ -48,7 +48,7 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.9.59'; /* v2.9.59(beta): 控制台纪律落地(用户令"不允许控制台拉屎")——调试日志仅 beta 构建输出(构建注入 window.__HS_DEBUG__),发行版门禁保证零 console.log;console.warn/error=报错类两版都留;构建脚本新增 --beta 模式自动产出 版本号beta.txt */
+const V = '2.9.60'; /* v2.9.60(beta): ET 同步两级防抖+rlog 消息修——①页面刷新首读不再必然全量重应用(签名基线入 localStorage 跨会话存续;旧会话变量每次刷新必判变化,实测每次开面板=拆链重建 1.9s) ②仅外联端点闪变(P2P 临时对端)60s 静默窗,核心(网段/端口)变化仍立即应用 ③日志清理消息先存数值再清零(修恒显 0KB 掩盖洪水量的自踩 bug) */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
@@ -58,11 +58,11 @@ const dbg = function () { if (typeof window !== 'undefined' && window.__HS_DEBUG
 
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
+  '2.9.60': '(beta 待真机验收)ET 同步两级防抖+日志清理消息修(真机风暴根修):①旧签名是会话变量,每次开/刷面板首读必判"ET组网变化"→全量 fw 重应用(实测单次 1.9s 拆链重建,受管设备瞬断重连风暴+mihomo 日志 832KB/14s)——签名基线入 localStorage 跨刷新存续,同签名零动作 ②infra_ips 单独变化(P2P 临时对端闪变,111.204.42.8:4824 实锢)进 60s 静默窗,cidrs/v6/端口核心变化仍立即应用 ③applyFw 同步推进持久基线防双应用 ④日志清理消息先存 kb 再清零(原 ST=o 同对象自踩恒显 0KB,832KB 洪水也看不见);applyFw 15s 超时实测 1.9s 余量充足不调(用户实测纠偏)',
   '2.9.59': '(beta 待真机验收)控制台纪律落地:调试日志(init/applyFw 等 19 处 console.log)改为 dbg 通道——仅 beta 构建输出(构建脚本 --beta 注入 window.__HS_DEBUG__ 开关),发行版构建门禁扫描产物零 console.log 违者构建失败;console.warn/error 属报错类两种产物都保留(双实例守卫/ET 降级提示等);构建发行版.sh 新增 --beta 参数自动产出 小海关插件-X.Y.Zbeta.txt(版本号取自源码 V)',
   '2.9.58': 'ET 共存 state.json 降级抽取补全:对端文件持续非法 JSON 时(实锇:ET 插件 infra_endpoints joiner 少引号,≥2 外联端点起文件恒非法→小海关每次解析必炸恒走降级,而降级对象缺 updated/tun)「更新于 ?」恒显+TUN 网卡行消失;现降级对象补抽 tun/config_server/updated(防火墙 ETTUN/ETCS 兜底同步复活),降级后 350ms 净读重试一次救瞬态半文件,console.warn 会话只提示一次不再刷屏;ET 侧一字符根修另报',
   '2.9.57': '①订阅有效期方案B:服务端发了流量数据却未给 expire→自动判「长期有效」(此前此类订阅正文又无"长期/永久"字样则什么都不显示;实证:中国国际机场 expire=空+正文零线索,良心云靠正文信息节点"套餐到期：长期有效"字样兜底);正文若补抓到具体到期日期仍会覆盖为日期,自动判定可被纠正 ②订阅卡片图标全撤(徽章/流量行/meta/按钮/编辑卡 17 处):表情图标挤占按钮空间,移动端放不下(用户反馈),页头添加按钮保留',
   '2.9.56': '修复 v6 开关自诞生失效(pr 未声明+未 await)+新手引导✕复活+卸载取消语义+UDP实测异常防护',
-  '2.9.55': '分流图兜底胶囊限宽(PC 真机反馈宽达 ~210px):第⑤层胶囊文本=「兜底 +出口文本」,v2.9.53 起出口含节点名+延迟(断链时甚至是全链)且宽度公式全长×9.8 无上限,长节点名直接撑爆;现按「名 · Nms[ ·未测活]」拆分,名超预算截…(延迟/存活后缀保留),总宽 13 单位封顶;宽度公式改按字符类别估宽(全宽1/ASCII .56×fs×1.1 余量,替代全长×9.8);胶囊加 title 悬停显全文,全链仍在详情卡「兜底出口」行;副标(节点名行)同步限宽;补 v2.9.53 欠的出口文本 esc(模块纪律:用户数据一律 esc)',
 }; /* 超5版删最底(2.8.10) */
 /* 语义化版本比较: a<b 负 / 相等 0 / a>b 正 */
 function verCmp(a, b) {
@@ -333,8 +333,9 @@ async function collectStatus() {
   /* 运行日志 256KB 硬上限(仅排查用,256KB 足够记录完整复现过程;debug 级增长极快也拦住)。
      截断不换文件,引擎 fd 继续追加;事件驱动(每次状态采集顺带检查),符合无轮询纪律 */
   if (o.rlog > 262144) {
+    const kbBefore = Math.round(o.rlog / 1024); /* v2.9.60: 先取数值——ST=o 同对象,回调里 ST.rlog=0 先踩掉 o.rlog,消息恒显"0KB"(真机实锢: 洪水 832KB 也显示 0KB) */
     run(': > ' + shq(LOGF) + ' 2>/dev/null', 5000).then(r => {
-      if (r.success) { ST.rlog = 0; opLog('运行日志超256KB已自动清理(' + Math.round(o.rlog / 1024) + 'KB→0,如需完整日志请在复现后尽快导出)') }
+      if (r.success) { ST.rlog = 0; opLog('运行日志超256KB已自动清理(' + kbBefore + 'KB→0,如需完整日志请在复现后尽快导出)') }
     }).catch(() => { });
   }
   /* 分设备线路地址自动跟随: 地址集变化→静默热重载(签名防抖;失败下次刷新重试) */
@@ -1349,19 +1350,37 @@ function etSig() {
     + '|' + (ET_CACHE.p2p_ports || []).slice().sort((a, b) => a - b).join(',')
     + '|' + (ET_CACHE.infra_ips || []).slice().sort().join(','); /* v2.7.21: 外联端点变化也触发 fw 更新 */
 }
+/* v2.9.60: 核心/外联分层签名——cidrs/v6/端口=防火墙语义核心,变化须立即重应用;
+   infra_ips 仅外联端点补充排除,P2P 临时对端闪变属常态(真机实锢: 111.204.42.8:4824 闪变,
+   每次状态采集都判"ET组网变化"→全量拆链重建 1.9s→受管设备断连风暴+日志 832KB/14s) */
+function etSigCore() {
+  if (!C.coexistAuto || !ET_CACHE || !ET_CACHE.active) return '';
+  return (ET_CACHE.cidrs || []).slice().sort().join(',') + '|' + (ET_CACHE.cidrs6 || []).slice().sort().join(',')
+    + '|' + (ET_CACHE.p2p_ports || []).slice().sort((a, b) => a - b).join(',');
+}
+/* v2.9.60: 跨会话持久基线(localStorage)——旧签名是会话变量,页面每次刷新首读必判变化必应用
+   (实测: 每次开/刷面板=一次全量 fw 重应用);基线跨刷新存续,同签名零动作 */
+const etBaseGet = () => { try { return { sig: localStorage.getItem('hs_etsig') || '', core: localStorage.getItem('hs_etsig_core') || '', t: +(localStorage.getItem('hs_etsig_t') || 0) } } catch (e) { return { sig: '', core: '', t: 0 } } };
+const etBaseSet = (sig, core) => { try { localStorage.setItem('hs_etsig', sig); localStorage.setItem('hs_etsig_core', core); localStorage.setItem('hs_etsig_t', String(Date.now())) } catch (e) { } };
 /* 审查 P1-1: ET peer/网段变化跟随——applyFw 时记录签名,collectStatus 尾部比对,
-   变化即 reapplyFw(fw 排除面同步);与 syncLineRules 同防抖形态,失败下次采集重试 */
+   变化即 reapplyFw(fw 排除面同步);失败下次采集重试。
+   v2.9.60 防抖两级: ①跨会话持久基线一致→零动作 ②仅 infra 变(核心不变)→60s 内不重复拆链 */
 async function syncEtRules() {
   if (HS_UPGRADING) return;
   if (!C.coexistAuto || !ST.running) return; /* 引擎未接管时无需 fw 同步 */
   try {
     await readEtState(); /* 刷新 ET_CACHE(含 state.json+监听口补采) */
     const sig = etSig();
-    if (!sig || sig === HS_ET_SIG) return;
+    if (!sig || sig === HS_ET_SIG) return; /* 不活跃不摘除排除面(原语义) */
+    const pc = etBaseGet();
+    if (sig === pc.sig) { HS_ET_SIG = sig; return; } /* v2.9.60: 与持久基线一致(页面刷新首读)——不应用 */
+    const core = etSigCore();
+    if (core === pc.core && pc.t && Date.now() - pc.t < 60000) { HS_ET_SIG = sig; return; } /* v2.9.60: 仅外联端点闪变,60s 静默窗 */
     if (!HS_ET_SIG && !ET_CACHE) return; /* ET 未安装/未活跃: 首次空基线不动作 */
-    const prev = HS_ET_SIG; HS_ET_SIG = sig;
+    HS_ET_SIG = sig;
     await reapplyFw(); /* fw 排除面同步(含 fw 重生成+挂载) */
-    await opLog('ET组网变化,已自动更新排除规则');
+    await opLog('ET组网变化,已自动更新排除规则' + (pc.sig && core === pc.core ? '(外联端点)' : ''));
+    etBaseSet(sig, core); /* 持久基线仅在实际应用后推进(防抖窗内不推) */
   } catch (e) { /* 静默重试: 下次 collectStatus 再比 */ }
 }
 async function readEtState() {
@@ -1827,6 +1846,7 @@ async function hsCleanJunk() {
 async function applyFw() {
   await readEtState();
   HS_ET_SIG = etSig(); /* 审查 P1-1: 记录本次 applyFw 消费的 ET 快照签名,供 syncEtRules 比对 */
+  etBaseSet(HS_ET_SIG, etSigCore()); /* v2.9.60: 持久基线同步推进——否则 JS 侧应用后 localStorage 仍旧值,下轮 sync 会重复应用一次 */
   const w = await writeFile(FW, genFwSh());
   if (!w) { toast('防火墙脚本写入失败', 'red'); return false }
   const r = await run('chmod 755 ' + shq(FW) + '; sh ' + shq(FW) + ' apply 2>&1; echo "---RULES---"; iptables -t nat -S PREROUTING 2>/dev/null | grep HS_ | head -6; iptables -t nat -S HS_LAN 2>/dev/null | head -8', 15000);
