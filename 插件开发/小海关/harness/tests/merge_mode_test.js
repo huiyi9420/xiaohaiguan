@@ -21,7 +21,7 @@ const PLUGIN = require('fs').readFileSync(PLUGIN_PATH, 'utf8');
   t('合并模式段落标记', cfg.includes('合并模式'));
   t('本地主组组链存在(🚀 节点选择)', cfg.includes('name: "🚀 节点选择"') || cfg.includes('name: \\"🚀 节点选择\\"'));
   t('订阅组保留(良心云)', cfg.includes('name: 良心云'));
-  t('本地规则最先(自定义域名 DIRECT)', idx('example-corp.cn,DIRECT') >= 0 && idx('example-corp.cn,DIRECT') < idx('services.googleapis.cn'));
+  t('本地规则最先(seeyoncloud DIRECT)', idx('example-corp.cn,DIRECT') >= 0 && idx('example-corp.cn,DIRECT') < idx('services.googleapis.cn'));
   t('国内直通在订阅规则前', idx('GEOSITE,CN,DIRECT') >= 0 && idx('GEOSITE,CN,DIRECT') < idx('services.googleapis.cn'));
   t('私网免流段改 REJECT(100.64.0.0/10)', cfg.includes('IP-CIDR,100.64.0.0/10,REJECT') && !cfg.includes('IP-CIDR,100.64.0.0/10,DIRECT'));
   t('v6 链路本地段改 REJECT(fe80::/10)', cfg.includes('IP-CIDR6,fe80::/10,REJECT'));

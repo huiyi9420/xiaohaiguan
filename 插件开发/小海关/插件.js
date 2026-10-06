@@ -48,12 +48,13 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.9.53'; /* v2.9.53: 分流图第⑤层兜底实走节点显示根修——provider 节点不在 /proxies 字典致链解析首跳即断(恒只剩组名),断链补 now 终点+providers 查延迟,胶囊动态显示"节点 · 延迟" */
+const V = '2.9.54'; /* v2.9.54: 移动端弹窗控件叠压根修——.hs-mb 是定高 flex 列且 overflow:hidden,内容超高时行被压缩(min-height:42px 顶掉 auto 内容下限),行内容溢出行盒压进邻行(真机 375px 实测:关键词输入框溢出 6px 压进地区保留行,用户手机更矮+胶囊更多致三层叠压);行改 flex 永不压缩+弹窗体改纵向可滚 */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
+  '2.9.54': '移动端弹窗控件叠压根修(用户反馈+本人手机复现:节点过滤弹窗关键词输入框/地区保留/实时预览挤到一块):根因=弹窗体 .hs-mb 是被 86dvh 卡死的 flex 列且 overflow:hidden,内容超高时收缩压力全压在带 min-height:42px 的 .hs-row 上(显式 min-height 顶掉 auto 内容下限,实测行 clientH 91 vs scrollH 97),行内容溢出行盒、输入框与地区胶囊压进邻行;修复=①.hs-row 加 flex 永不压缩(全部弹窗受益) ②.hs-mb 改纵向可滚(溢出走滚动不再裁死) ③救活 v2.9.6 移动端左右边距 16→0 决策(被同优先级后定义覆盖失效,规则移回基定义之后) ④实时预览两列 ≤480px 纵排(窄屏两列胶囊省略号过重)',
   '2.9.53': '分流图第⑤层「兜底」显示实走节点根修(真机:恒显示"节点选择"不知道流量去哪):订阅节点多为 proxy-provider 引入,不在 /proxies 字典(实测字典仅 11 键全为组/内置,组 now 指向的节点查无此键)——链解析在 P[now] 首跳即断,链永远只剩组名;现断链时把 now 终点补入链,并到 /providers/proxies 找该节点取延迟/存活;第⑤层胶囊动态显示「节点 · 延迟ms」,全链(组→组→节点)留详情卡,未就绪明确标"读取中"不再伪装终态',
   '2.9.52': '诊断修复交互重做+ET共存误报根修:①「ET组网共存·排除规则未挂载」系恒误报——旧判据 grep 防火墙脚本 shell 变量名(ETNETS等),iptables 回显的是展开后真实网段,字面量永远 0(WebSSH 实证:HS_LAN 7条/HS_UDP 3条排除在位);改判 state.json 真实网段与打洞端口 ②报告里点修复项弹说明窗——讲清现象/影响/动作与取舍,不引导必须修 ③「忽略此项」:忽略后不计警示,报告列表随时取消忽略 ④一键修复不再收忽略项',
   '2.9.51': '点数字展开回调丝滑档(注水.5s/行渐.34s/延迟阶梯.12-.32s,总感知<0.7s)——1.5s 慢档保留给折叠面板/水流填充/添加区',
@@ -2156,12 +2157,12 @@ function injectCss() {
   + '@media(min-width:481px) and (max-width:1024px){.hs-modal.big{width:88vw;max-height:84vh;max-height:84dvh}}'
   + '@media(max-width:480px){'
   + '.hs-modal,.hs-modal.big{width:96vw}'
-  + '.hs-mb{padding:10px 0 0}' /* v2.9.6: 左右边距 16→0(用户定调);此前对 .hs-row 的纵向堆叠改动修坏全页布局,已还原 */
   + '}'
   + '.hs-mh{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.1);flex:none}'
   + '.hs-mh .t{font-weight:700;font-size:.9rem;color:var(--dark-title-color,skyblue)}'
   + '.hs-mx{background:none;border:0;color:#b3bdcb;font-size:1.05rem;cursor:pointer;padding:2px 6px}'
-  + '.hs-mb{padding:10px 16px 0;overflow:hidden;flex:1;min-height:0;display:flex;flex-direction:column}'
+  + '.hs-mb{padding:10px 16px 0;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;flex:1;min-height:0;display:flex;flex-direction:column}' /* v2.9.54: overflow:hidden→纵向可滚——内容超高时不再压缩/裁死子项(配合 .hs-row flex 不收缩,行内容永不溢出行盒) */
+  + '@media(max-width:480px){.hs-mb{padding:10px 0 0}.hs-pvcols{flex-direction:column}}' /* v2.9.54: 移回基定义之后救活 v2.9.6 移动端 0 边距决策(此前被同优先级后定义覆盖失效);预览两列窄屏纵排 */
   + '.hs-pgscroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding-bottom:14px}'
   + '.hs-pghead{flex:none;margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.08)}'
   + '.hs-mb.hs-node-mode{display:flex;flex-direction:column;overflow:hidden;padding:10px 16px 0}'
@@ -2172,7 +2173,7 @@ function injectCss() {
   + '.hs-tabs button.on{color:var(--dark-title-color,skyblue);border-bottom-color:var(--dark-title-color,skyblue);font-weight:600}'
   + '.hs-warn{background:rgba(229,115,115,.12);border:1px solid rgba(229,115,115,.35);color:#ffb3b3;border-radius:10px;padding:8px 10px;font-size:.76rem;margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
   + '.hs-li{font-size:.78rem;padding:3px 0;border-bottom:1px dashed rgba(255,255,255,.06)}'
-  + '.hs-row{display:flex;align-items:center;gap:12px;min-height:42px;padding:8px 2px;border-bottom:1px dashed rgba(255,255,255,.06);flex-wrap:wrap}'
+  + '.hs-row{display:flex;align-items:center;gap:12px;min-height:42px;padding:8px 2px;border-bottom:1px dashed rgba(255,255,255,.06);flex-wrap:wrap;flex:none}' /* v2.9.54: flex 不收缩——.hs-row 带 min-height:42px 显式值会顶掉 auto 内容下限,弹窗体空间不足时行被压缩、内容溢出行盒压进邻行(移动端过滤弹窗叠压根因) */
   + '.hs-row:last-child{border-bottom:0}'
   + '.hs-row .hs-sl{flex:1;min-width:0}'
   + '.hs-row .hs-st{font-size:.8rem}'
@@ -3764,7 +3765,7 @@ async function openSubFilterDlg(i) {
       + ((f.keep && f.keep.length) ? '<span class="hs-tag y" style="font-size:.72rem">手动保留-' + f.keep.length + '</span>' : '')
       + (!dropped ? '<span class="hs-tag y" style="font-size:.72rem">无过滤</span>' : '')
       + '</div>'
-      + '<div style="display:flex;gap:8px">'
+      + '<div class="hs-pvcols" style="display:flex;gap:8px">' /* v2.9.54: 窄屏纵排(≤480px,见 .hs-pvcols 媒体规则)——两列并排在 375px 下胶囊省略号过重 */
       + '<div style="flex:1;min-width:0;border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:8px 10px;background:rgba(0,0,0,.22)">'
       + '<div style="font-size:.76rem;font-weight:700;color:#e57373;margin-bottom:5px">✕ 排除 <b style="color:#e8eaf0">' + (names.length - pv.kept.length) + '</b> <span class="hs-hint" style="font-size:.66rem">/ 全部 ' + names.length + '</span></div>'
       + '<div id="hs_pv_left" style="max-height:180px;overflow-y:auto;line-height:1.9">' + names.map(n => li(n, !!keptSet[n])).join('') + '</div></div>'
