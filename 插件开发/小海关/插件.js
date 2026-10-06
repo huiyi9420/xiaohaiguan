@@ -48,7 +48,7 @@ if (window.__customs_loaded) {
 window.__customs_loaded = true;
 
 /* ================= 常量 ================= */
-const V = '2.9.60'; /* v2.9.60(beta): ET 同步两级防抖+rlog 消息修——①页面刷新首读不再必然全量重应用(签名基线入 localStorage 跨会话存续;旧会话变量每次刷新必判变化,实测每次开面板=拆链重建 1.9s) ②仅外联端点闪变(P2P 临时对端)60s 静默窗,核心(网段/端口)变化仍立即应用 ③日志清理消息先存数值再清零(修恒显 0KB 掩盖洪水量的自踩 bug) */
+const V = '2.9.61'; /* v2.9.61(beta): 整配置热重载根修(path 模式)+fw_clean 退出码修——①8 处配置 PUT 全改 {path:CFG} 引擎自读盘+apiPutSlow 30s(用户 HAR 实锢:payload 模式 227KB 超内核单参数 128KB,execve E2BIG 热重载从未成功一直走重启兜底,'删规则保存提示热加载失败'即此) ②fw_clean 尾部 WARN 探测行链清光时短路返回非零→cleaned 却 success:false,恒真收尾复位 */
 /* 在线使用说明(新用户入门引导页,2026-10-02 上线) */
 const GUIDE_URL = 'https://artificial-lavender-zhzg63cn.edgeone.dev/';
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;只记用户可感知的要点,不追全量) */
@@ -58,11 +58,11 @@ const dbg = function () { if (typeof window !== 'undefined' && window.__HS_DEBUG
 
 /* 版本变更摘要(升级弹卡展示用,新版本在此顶部加一行;仅保留最近5个版本,更早的进仓库CHANGELOG.md) */
 const CHANGELOG = {
+  '2.9.61': '(beta 待真机验收)整配置热重载根修+fw_clean 退出码修(用户报障:删除强制代理规则保存提示热加载失败,HAR 全包取证):①根因=配置 PUT 用 payload 模式把整份 yaml 塞进 curl -d 命令行参数,合并模式配置 227KB 超内核单参数 128KB 上限,execve E2BIG——curl 根本没执行,success:false,**热重载从装合并模式起就没成功过,一直静默走引擎重启兜底**;修=8 处调用点全改 {path:CFG}(文件均已先写盘,引擎自读,隧道注入同款姿势)+apiPutSlow 30s 超时+失败详情 ②fw_clean 尾部 WARN 探测(iptables -nL && echo)在链已清光时短路返回非零,清得越干净退出码越 1(HAR 实锢:输出 cleaned 却 success:false),恒真收尾复位;验收=改任意规则保存应秒级热重载生效且无重启(操作日志无重启痕迹),引擎 PID 不变',
   '2.9.60': '(beta 待真机验收)ET 同步两级防抖+日志清理消息修(真机风暴根修):①旧签名是会话变量,每次开/刷面板首读必判"ET组网变化"→全量 fw 重应用(实测单次 1.9s 拆链重建,受管设备瞬断重连风暴+mihomo 日志 832KB/14s)——签名基线入 localStorage 跨刷新存续,同签名零动作 ②infra_ips 单独变化(P2P 临时对端闪变,111.204.42.8:4824 实锢)进 60s 静默窗,cidrs/v6/端口核心变化仍立即应用 ③applyFw 同步推进持久基线防双应用 ④日志清理消息先存 kb 再清零(原 ST=o 同对象自踩恒显 0KB,832KB 洪水也看不见);applyFw 15s 超时实测 1.9s 余量充足不调(用户实测纠偏)',
   '2.9.59': '(beta 待真机验收)控制台纪律落地:调试日志(init/applyFw 等 19 处 console.log)改为 dbg 通道——仅 beta 构建输出(构建脚本 --beta 注入 window.__HS_DEBUG__ 开关),发行版构建门禁扫描产物零 console.log 违者构建失败;console.warn/error 属报错类两种产物都保留(双实例守卫/ET 降级提示等);构建发行版.sh 新增 --beta 参数自动产出 小海关插件-X.Y.Zbeta.txt(版本号取自源码 V)',
   '2.9.58': 'ET 共存 state.json 降级抽取补全:对端文件持续非法 JSON 时(实锇:ET 插件 infra_endpoints joiner 少引号,≥2 外联端点起文件恒非法→小海关每次解析必炸恒走降级,而降级对象缺 updated/tun)「更新于 ?」恒显+TUN 网卡行消失;现降级对象补抽 tun/config_server/updated(防火墙 ETTUN/ETCS 兜底同步复活),降级后 350ms 净读重试一次救瞬态半文件,console.warn 会话只提示一次不再刷屏;ET 侧一字符根修另报',
   '2.9.57': '①订阅有效期方案B:服务端发了流量数据却未给 expire→自动判「长期有效」(此前此类订阅正文又无"长期/永久"字样则什么都不显示;实证:中国国际机场 expire=空+正文零线索,良心云靠正文信息节点"套餐到期：长期有效"字样兜底);正文若补抓到具体到期日期仍会覆盖为日期,自动判定可被纠正 ②订阅卡片图标全撤(徽章/流量行/meta/按钮/编辑卡 17 处):表情图标挤占按钮空间,移动端放不下(用户反馈),页头添加按钮保留',
-  '2.9.56': '修复 v6 开关自诞生失效(pr 未声明+未 await)+新手引导✕复活+卸载取消语义+UDP实测异常防护',
 }; /* 超5版删最底(2.8.10) */
 /* 语义化版本比较: a<b 负 / 相等 0 / a>b 正 */
 function verCmp(a, b) {
@@ -516,8 +516,8 @@ async function syncLineRules() {
     if (yaml === null) { HS_LINE_SIG = prev; await opLog('线路地址跟随:订阅解析失败,跳过重写(旧配置保留)'); return }
     /* F13: 写盘失败不发起热重载——apiPut 成功会令引擎内存与盘上配置分叉;回滚签名让下次采集重试(与 apiPut 失败分支同语义) */
     if (!(await writeFile(CFG, yaml))) { HS_LINE_SIG = prev; await opLog('线路地址跟随:配置写盘失败,跳过热重载(当前配置保留,下次刷新重试)'); return }
-    const ok = await apiPut('/configs?force=true', { path: '', payload: yaml });
-    if (!ok) { HS_LINE_SIG = prev; await opLog('线路地址跟随:热重载失败,下次刷新重试'); return }
+    const pr = await apiPutSlow('/configs?force=true', { path: CFG }); /* v2.9.61: path 模式+30s——payload 模式整配置(合并模式 227KB)超内核单参数 128KB,execve E2BIG 热重载从未成功(真机 HAR 实锢),文件已写盘引擎自读 */
+    if (!pr.ok) { HS_LINE_SIG = prev; await opLog('线路地址跟随:热重载失败(' + pr.why + '),下次刷新重试'); return }
     /* 方案A: 线路成员(MAC)变化时 fw 层 MAC 集合与链路同步更新(签名防抖下低频,
        正常改动经设备下拉/线路管理保存链已无条件 reapplyFw(见 refreshDevPaneInner/openLineDlg),此处为运行中其他来源变化(如并发改配置)的兜底) */
     await reapplyFw();
@@ -1568,6 +1568,7 @@ function genFwSh() {
   '  iptables -t nat -nL HS_LAN >/dev/null 2>&1 && echo "WARN: HS_LAN 清理未净(残留规则风险)"',
   '  iptables -t mangle -nL HS_UDP >/dev/null 2>&1 && echo "WARN: HS_UDP 清理未净(残留规则风险)"',
   '  ip6tables -t mangle -nL HS_V6_UDP >/dev/null 2>&1 && echo "WARN: HS_V6_UDP 清理未净"',
+  '  true', /* v2.9.61: 上方 WARN 探测在"链已清光"时 && 短路返回非零——清得越干净退出码越 1,run_shell 判 success:false(真机 HAR 实锢: 输出 cleaned 却 success:false);恒真收尾复位退出码 */
     '}',
     '',
     'fw_apply() {',
@@ -2953,7 +2954,8 @@ async function switchMode(mode) {
   if (yaml === null) { toast('⚠️ 订阅解析失败,模式仅保存,未热重载(旧配置保留)', 'red'); return }
   /* F13: 写盘失败不发起热重载(同 syncLineRules)——模式已保存,下次启动按新模式生成;也不平滑重启(重启也生成不了盘上配置) */
   if (!(await writeFile(CFG, yaml))) { toast('❌ 配置写盘失败,模式已保存但未热重载(旧配置保留)', 'red'); await opLog('模式切换:写盘失败,跳过热重载(' + mode + ')'); return }
-  const ok = await apiPut('/configs?force=true', { path: '', payload: yaml });
+  const pr = await apiPutSlow('/configs?force=true', { path: CFG }); /* v2.9.61: path 模式+30s——payload 模式整配置(合并模式 227KB)超内核单参数 128KB,execve E2BIG 热重载从未成功(真机 HAR 实锢),文件已写盘引擎自读 */
+  const ok = pr.ok;
   if (ok) {
     toast('模式热重载:' + ({ auto: '自动选优', balance: '负载均衡', fallback: '故障转移', manual: '手动' })[mode], 'green');
     await opLog('模式热切换:' + mode);
@@ -3159,7 +3161,7 @@ async function refreshNodePane() {
       C.mode = 'manual'; C.pausedAuto = true; await saveConf();
       const yml = genConfigYaml();
       if (yml === null) { toast('⚠️ 订阅解析失败,跳过配置兜底重写(旧配置保留)', 'red') }
-      else { await writeFile(CFG, yml); await apiPut('/configs?force=true', { path: '', payload: yml }); }
+      else { await writeFile(CFG, yml); await apiPutSlow('/configs?force=true', { path: CFG }); } /* v2.9.61: path 模式+30s——payload 模式整配置(合并模式 227KB)超内核单参数 128KB,execve E2BIG 热重载从未成功(真机 HAR 实锢),文件已写盘引擎自读 */
       await wait(500);
     }
     let ok = await apiPut('/proxies/' + encodeURIComponent(target), { name: r.dataset.node });
@@ -3499,8 +3501,8 @@ async function saveConfReload(msg) {
     const yaml = genConfigYaml();
     if (yaml === null) { toast('⚠️ 订阅解析失败,未热重载(旧配置保留)', 'red'); await opLog('保存后热重载:订阅解析失败,跳过(旧配置保留)'); return false }
     await writeFile(CFG, yaml);
-    const ok = await apiPut('/configs?force=true', { path: '', payload: yaml });
-    if (!ok) { toast('热重载失败,重启引擎后生效', 'pink'); opLog('热重载失败(引擎运行中,重启后生效)'); return false }
+    const pr = await apiPutSlow('/configs?force=true', { path: CFG }); /* v2.9.61: path 模式+30s——payload 模式整配置(合并模式 227KB)超内核单参数 128KB,execve E2BIG 热重载从未成功(真机 HAR 实锢),文件已写盘引擎自读 */
+    if (!pr.ok) { toast('热重载失败(' + pr.why + '),重启引擎后生效', 'pink'); opLog('热重载失败(' + pr.why + ';引擎运行中,重启后生效)'); return false }
     return true;
   } else if (msg) toast('引擎未运行,下次启动生效', 'pink');
   return false;
@@ -4240,7 +4242,8 @@ async function trySetSave() {
     const yaml = genConfigYaml();
     if (yaml === null) { toast('⚠️ 订阅解析失败,分流改动未热重载(已保存,旧配置保留)', 'red'); return }
     await writeFile(CFG, yaml);
-    const ok = await apiPut('/configs?force=true', { path: '', payload: yaml });
+    const pr = await apiPutSlow('/configs?force=true', { path: CFG }); /* v2.9.61: path 模式+30s——payload 模式整配置(合并模式 227KB)超内核单参数 128KB,execve E2BIG 热重载从未成功(真机 HAR 实锢),文件已写盘引擎自读 */
+    const ok = pr.ok;
     if (ok) toast('✅ 分流规则已热重载生效', 'green');
     else { toast('热重载失败,平滑重启中', 'green'); await applyWithTxn('分流规则') }
   }
@@ -5167,7 +5170,7 @@ function bindPaneLog(p) {
         if (C.logLevel !== 'debug') return; /* v1.8.5: 用户中途改级别后不再被 10 分钟定时器覆盖 */
         C.logLevel = 'info'; await saveConf();
         const yml = genConfigYaml();
-        if (yml !== null) { await writeFile(CFG, yml); await apiPut('/configs?force=true', { path: '', payload: yml }); }
+        if (yml !== null) { await writeFile(CFG, yml); await apiPutSlow('/configs?force=true', { path: CFG }); } /* v2.9.61: path 模式+30s——payload 模式整配置(合并模式 227KB)超内核单参数 128KB,execve E2BIG 热重载从未成功(真机 HAR 实锢),文件已写盘引擎自读 */
         toast('debug日志已自动切回info(限时10分钟)', 'green'); await opLog('debug限时到点,热切回info');
       }, 600000);
     }
@@ -6241,9 +6244,9 @@ async function applyFix(it) {
        (含国内 v6 快车道),且 fw_clean 不摘、卸载不清,只能重启设备恢复(2026-09-13 审查 P0)。
        改为与文案一致的"重建防火墙":清规则→按当前配置重应用(未运行则保持清理态) */
     else if (it.fix.id === 'rt-v6') { await fwClean(); await reapplyFw(); }
-    else if (it.fix.id === 'rt-line') { const yaml = genConfigYaml(); if (yaml === null) toast('订阅解析失败,跳过重写(旧配置保留)', 'red'); else { await writeFile(CFG, yaml); const okp = await apiPut('/configs?force=true', { path: '', payload: yaml }); if (!okp) toast('线路配置热重载失败,建议重启引擎', 'red'); } }
+    else if (it.fix.id === 'rt-line') { const yaml = genConfigYaml(); if (yaml === null) toast('订阅解析失败,跳过重写(旧配置保留)', 'red'); else { await writeFile(CFG, yaml); const prl = await apiPutSlow('/configs?force=true', { path: CFG }); /* v2.9.61: path 模式+30s——payload 模式整配置(合并模式 227KB)超内核单参数 128KB,execve E2BIG 热重载从未成功(真机 HAR 实锢),文件已写盘引擎自读 */ if (!prl.ok) toast('线路配置热重载失败(' + prl.why + '),建议重启引擎', 'red'); } }
     /* ⑥ 重写配置并热重载(规则集重新生成/合成;apiPut 404 等以 toast 提示,复诊兜底) */
-    else if (it.fix.id === 'rt-prov') { const yaml = genConfigYaml(); if (yaml === null) toast('订阅解析失败,跳过重写(旧配置保留)', 'red'); else { await writeFile(CFG, yaml); const okp = await apiPut('/configs?force=true', { path: '', payload: yaml }); if (!okp) toast('规则集热重载失败，建议重启引擎', 'red'); } }
+    else if (it.fix.id === 'rt-prov') { const yaml = genConfigYaml(); if (yaml === null) toast('订阅解析失败,跳过重写(旧配置保留)', 'red'); else { await writeFile(CFG, yaml); const prp = await apiPutSlow('/configs?force=true', { path: CFG }); /* v2.9.61: path 模式+30s——payload 模式整配置(合并模式 227KB)超内核单参数 128KB,execve E2BIG 热重载从未成功(真机 HAR 实锢),文件已写盘引擎自读 */ if (!prp.ok) toast('规则集热重载失败(' + prp.why + '),建议重启引擎', 'red'); } }
     else if (it.fix.id === 'st-dns') await reapplyFw();
     else if (it.fix.id === 'log-trunc') { await run(': > ' + shq(LOGF) + ' 2>/dev/null', 5000); ST.rlog = 0 }
     else if (it.fix.id === 'cfg-lineref') { C.devices.forEach(d => { if (d.line && !(C.lines || []).some(L => L && L.id === d.line)) d.line = '' }); await saveConf(); }
